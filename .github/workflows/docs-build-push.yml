@@ -159,14 +159,14 @@ jobs:
         if: inputs.event_action == 'synchronize' || inputs.event_action == 'opened'
         with:
           inlineScript: |
-            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "${{github.repository}}/preview/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/preview/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
 
       - name: Azure upload for production
         uses: azure/cli@v2
         if: inputs.pr_merged == 'true'
         with:
           inlineScript: |
-            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
 
       - name: Azure purge CDN endpoint
         uses: azure/cli@v2
