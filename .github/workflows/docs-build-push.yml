@@ -71,15 +71,19 @@ jobs:
 
       - name: PR preview comment
         uses: actions/github-script@v6
-        if: github.event.action == 'opened'
+        # if: github.event.action == 'opened'
         with:
             script: |
                 const fs = require("fs");
 
                 const previewHostname = ${{steps.keyvault.outputs.previewHostname}};
+                console.log(previewHostname)
                 const previewUrlPath = process.env.PREVIEW_URL_PATH;
+                console.log(previewHostname)
                 const prNumber = context.payload.pull_request.number;
+                console.log(prNumber)
                 const previewUrl = `https://${previewHostname}${previewUrlPath}${prNumber}/`;
+                console.log(previewUrl)
 
                 const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
 
