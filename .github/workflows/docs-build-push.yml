@@ -149,7 +149,7 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened'
         with:
           inlineScript: |
-            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/preview/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
 
       - name: Azure upload for production
         uses: azure/cli@v2
