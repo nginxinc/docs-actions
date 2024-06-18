@@ -71,7 +71,7 @@ jobs:
 
       - name: PR preview comment
         uses: actions/github-script@v6
-        # if: github.event.action == 'opened'
+        if: github.event.action == 'opened'
         with:
             script: |
                 const previewHostname = "${{steps.keyvault.outputs.previewHostname}}";
