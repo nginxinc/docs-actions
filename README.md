@@ -51,21 +51,10 @@ on:
       - docsDirectory/**
 
 jobs:
-  setPrMerged:
-    runs-on: ubuntu-latest
-    outputs:
-      prMerged: ${{steps.setPrMerged.outputs.prMerged}}
-    steps:
-      - name: Set PR merged value
-        id: setPrMerged
-        run: echo "prMerged=${{github.event_name == 'push' && github.ref == 'refs/heads/main'}}" >> $GITHUB_OUTPUT
 
-  call-docs-build-push:
-    needs: setPrMerged
+call-docs-build-push:
     uses: nginxinc/docs-actions/.github/workflows/docs-build-push.yml@main
     with:
-      event_action: ${{github.event.action}}
-      pr_merged: ${{ needs.setPrMerged.outputs.prMerged}}
       production_url_path: "/"
       preview_url_path: "/previews/docs/"
       docs_source_path: "./public/"
@@ -78,8 +67,6 @@ jobs:
 
 Each docs repo has slightly different requirements in terms of inputs, primarily
 ```yml
-event_action: ${{github.event.action}}
-pr_merged: ${{ needs.setPrMerged.outputs.prMerged}}
 production_url_path: "/rootOfProduct"  (i.e. / for docs , /nginx-gateway-fabric for gateway fabric)
 preview_url_path: "/previews/nameOfProduction/"
 docs_source_path: "./outputDirOfBuiltDocs/"
