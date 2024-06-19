@@ -20,10 +20,11 @@ on:
         description: "Directory of built docs files. Hugo default would be `./public/`"
         required: true
         type: string
-      cdn_content_path:
-        description: "The content path to be purged. Change to main docs repo currently requires a full '/*' purge, unless we add logic to determine specifically which docs were updated"
-        required: true
+      docs_build_path:
+        description: "Directory where hugo or sphinx build command should be run from"
+        required: false
         type: string
+        default: ./
       doc_type:
         type: string
         description: "Type of source docs. Currently supports 'hugo' and 'sphinx'"
@@ -45,7 +46,6 @@ jobs:
       PRODUCTION_URL_PATH: ${{inputs.production_url_path}}
       PREVIEW_URL_PATH: ${{inputs.preview_url_path}}
       DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
-      CDN_CONTENT_PATH: ${{inputs.cdn_content_path}}
       EVENT_ACTION: ${{github.event.action}}
       PR_MERGED: ${{github.event_name == 'push' && github.ref == 'refs/heads/main'}}
     concurrency:
@@ -111,11 +111,13 @@ jobs:
 
       - name: Build Hugo for PR preview
         if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened')
+        working-directory: ${{inputs.docs_build_path}}
         run: |
             hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
             hugo --gc -e production --baseURL="https://${{steps.keyvault.outputs.previewHostname}}$PREVIEW_URL_PATH$PR_NUMBER"
 
       - name: Build Hugo for production
+        working-directory: ${{inputs.docs_build_path}}
         if: inputs.doc_type == 'hugo' && env.PR_MERGED == 'true'
         run: |
             hugo mod get "$THEME_MODULE@v$THEME_VERSION"
@@ -140,6 +142,7 @@ jobs:
             chmod 700 /home/runner/.gnupg
 
       - name: Build Sphinx for PR preview and production
+        working-directory: ${{inputs.docs_build_path}}
         if: inputs.doc_type == 'sphinx'
         run: |
             make deploy
@@ -149,20 +152,16 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened'
         with:
           inlineScript: |
-            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            az cdn endpoint purge --content-paths $PREVIEW_URL_PATH/* --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
 
       - name: Azure upload for production
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
         if: env.PR_MERGED == 'true'
         with:
           inlineScript: |
-            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
-
-      - name: Azure purge CDN endpoint
-        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
-        with:
-          inlineScript: |
-            az cdn endpoint purge --content-paths $CDN_CONTENT_PATH --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            az cdn endpoint purge --content-paths $PRODUCTION_URL_PATH/* --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
 
       - name: Azure logout
         run: |
