@@ -59,13 +59,52 @@ jobs:
       DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
       EVENT_ACTION: ${{github.event.action}}
       PR_MERGED: ${{github.event_name == 'push' && github.ref == 'refs/heads/main'}}
+      DEPLOYMENT_ENV: ${{inputs.environment}}
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - name: Validate environment inputs
-         # MUST be dev, staging, prod, preview
-        run: echo environment from inputs ${{inputs.environment}} - test 1.0
+        run: |
+          if [[ -z "${DEPLOYMENT_ENV}" ]]; then
+            echo "::notice::Defaulting to preview environment"
+
+            # for use in this step
+            export DEPLOYMENT_ENV="preview"
+
+            # for use in subsequent steps
+            echo "DEPLOYMENT_ENV=preview" >> "$GITHUB_ENV"
+          fi
+
+          echo "::notice::Validating environment input: ${DEPLOYMENT_ENV}"
+
+          if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview)$ ]]; then
+            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview"
+            exit 1
+          fi
+
+      - name: Set deployment domain
+        id: deployment
+        run: |
+          case ${DEPLOYMENT_ENV} in
+            dev)
+              DOMAIN="${DOMAIN_DEV}"
+              ;;
+            staging)
+              DOMAIN="${DOMAIN_STAGING}"
+              ;;
+            prod)
+              DOMAIN="${DOMAIN_PROD}"
+              ;;
+            preview)
+              DOMAIN="${DOMAIN_PREVIEW}"
+              ;;
+          esac
+
+          echo "::notice::Deploying to ${DEPLOYMENT_ENV} environment (${DOMAIN})"
+          echo "domain=${DOMAIN}" >> $GITHUB_OUTPUT
+          echo "environment=${DEPLOYMENT_ENV}" >> $GITHUB_OUTPUT
+
       - name: Azure login
         uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2.1.1
         with:
@@ -84,68 +123,44 @@ jobs:
               echo "$secret_get=$value" >> $GITHUB_OUTPUT
             done
 
-      - name: PR preview comment
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        if: github.event.action == 'opened'
-        with:
-            script: |
-                const previewHostname = "${{steps.keyvault.outputs.previewHostname}}";
-                const previewUrlPath = process.env.PREVIEW_URL_PATH;
-                const prNumber = context.payload.pull_request.number;
-                const previewUrl = `https://${previewHostname}${previewUrlPath}${prNumber}/`;
-
-                const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
-
-                |  Name | Link |
-                |:-:|------------------------|
-                |<span aria-hidden="true">😎</span> Deploy Preview | [${previewUrl}](${previewUrl}) |
-                ---`;
-
-                await github.rest.issues.createComment({
-                    issue_number: context.issue.number,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    body: body,
-                });
-
       - name: Checkout docs content
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.7.1
-        
+
+        ### Hugo builds
+
       - name: Setup Go
         uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        if: inputs.doc_type == 'hugo'
         with:
-            go-version: ${{env.GO_VERISON}}
-          # should only run for hugo
+          go-version: ${{env.GO_VERISON}}
 
-        # hugo builds
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@75d2e84710de30f6ff7268e08f310b60ef14033f # v3.0.0
         if: inputs.doc_type == 'hugo'
         with:
-            hugo-version: ${{env.HUGO_VERSION}}
+          hugo-version: ${{env.HUGO_VERSION}}
 
       - name: Build Hugo for PR preview
-        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened')
+        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || steps.deployment.outputs.environment == 'preview')
         working-directory: ${{inputs.docs_build_path}}
         run: |
-            hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
-            hugo --gc -e production --baseURL="https://$DOMAIN_PREVIEW$PREVIEW_URL_PATH$PR_NUMBER"
+          hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
+          hugo --gc -e production --baseURL="https://${{steps.deployment.outputs.domain}}${PREVIEW_URL_PATH}${PR_NUMBER}"
 
       - name: Build Hugo for environment
         working-directory: ${{inputs.docs_build_path}}
-        if: inputs.doc_type == 'hugo'
+        if: inputs.doc_type == 'hugo' && steps.deployment.outputs.environment != 'preview'
         run: |
-            hugo mod get "$THEME_MODULE@v$THEME_VERSION"
-            hugo --gc -e production --baseURL="https://${{steps.keyvault.outputs.productionHostname}}$PRODUCTION_URL_PATH"
-    
+          hugo mod get "$THEME_MODULE@v$THEME_VERSION"
+          hugo --gc -e production --baseURL="https://${{steps.deployment.outputs.domain}}$PRODUCTION_URL_PATH"
 
-        # sphinx builds
+        ### Sphinx builds
 
       - name: Setup Sphinx
         uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         if: inputs.doc_type == 'sphinx'
         with:
-            python-version: '3.9'
+          python-version: "3.9"
 
       - name: Install python dependencies
         if: inputs.doc_type == 'sphinx'
@@ -154,34 +169,85 @@ jobs:
       - name: Setup Gnupg directories
         if: inputs.doc_type == 'sphinx'
         run: |
-            mkdir -p /home/runner/.gnupg
-            chmod 700 /home/runner/.gnupg
-
+          mkdir -p /home/runner/.gnupg
+          chmod 700 /home/runner/.gnupg
 
       - name: Build Sphinx for PR preview and production
         working-directory: ${{inputs.docs_build_path}}
         if: inputs.doc_type == 'sphinx'
         run: |
-            make deploy
+          make deploy
+
+      ### Azure upload
 
       - name: Azure upload PR preview
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
-        if: github.event.action == 'synchronize' || github.event.action == 'opened'
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || steps.deployment.outputs.environment == 'preview'
         with:
           inlineScript: |
-            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
-            az cdn endpoint purge --content-paths $PREVIEW_URL_PATH/* --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+            cd ${{inputs.docs_build_path}} \
+            && az storage blob upload-batch \
+                 -s $DOCS_SOURCE_PATH \
+                 -d '$web' \
+                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --auth-mode login
+
+            az cdn endpoint purge \
+              --content-paths $PREVIEW_URL_PATH/* \
+              --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+              --name ${{steps.keyvault.outputs.cdnName}} \
+              --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
         if: env.PR_MERGED == 'true'
         with:
-          # TODO: dynamically set the root of destination path based on environment set
           inlineScript: |
-            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
-            az cdn endpoint purge --content-paths $PRODUCTION_URL_PATH/* --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+            cd ${{inputs.docs_build_path}} \
+            && az storage blob upload-batch \
+                 -s $DOCS_SOURCE_PATH \
+                 -d '$web' \
+                 --destination-path "${{steps.deployment.outputs.environment}}/${{github.repository}}/latest/" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --auth-mode login
+
+            az cdn endpoint purge \
+              --content-paths ${{steps.deployment.outputs.domain}}/* \
+              --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+              --name ${{steps.keyvault.outputs.cdnName}} \
+              --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
 
       - name: Azure logout
         run: |
           az logout
         if: always()
+
+      ### PR preview comment
+
+      - name: PR preview comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        if: github.event.action == 'opened' && steps.deployment.outputs.environment == 'preview'
+        with:
+          script: |
+            const previewHostname = process.env.DOMAIN_PREVIEW;
+            const previewUrlPath = process.env.PREVIEW_URL_PATH;
+            const prNumber = context.payload.pull_request.number;
+
+            const previewUrl = `https://${previewHostname}${previewUrlPath}${prNumber}/`;
+
+            const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
+
+            |  Name | Link |
+            |:-:|------------------------|
+            |<span aria-hidden="true">😎</span> Deploy Preview | [${previewUrl}](${previewUrl}) |
+            ---`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
