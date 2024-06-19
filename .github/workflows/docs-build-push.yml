@@ -67,19 +67,20 @@ jobs:
       - name: Validate environment inputs
         run: |
           if [[ -z "${DEPLOYMENT_ENV}" ]]; then
-            echo "::notice::Defaulting to preview environment"
-
-            # for use in this step
+               # for use in this step
             export DEPLOYMENT_ENV="preview"
 
             # for use in subsequent steps
             echo "DEPLOYMENT_ENV=preview" >> "$GITHUB_ENV"
           fi
 
-          echo "::notice::Validating environment input: ${DEPLOYMENT_ENV}"
-
           if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview)$ ]]; then
             echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview"
+            exit 1
+          fi
+
+          if [[ "${DEPLOYMENT_ENV}" == "preview" && -z "${PR_NUMBER}" ]]; then
+            echo "::error::PR_NUMBER is required for preview environment"
             exit 1
           fi
 
@@ -101,9 +102,7 @@ jobs:
               ;;
           esac
 
-          echo "::notice::Deploying to ${DEPLOYMENT_ENV} environment (${DOMAIN})"
-          echo "domain=${DOMAIN}" >> $GITHUB_OUTPUT
-          echo "environment=${DEPLOYMENT_ENV}" >> $GITHUB_OUTPUT
+          echo "DEPLOYMENT_DOMAIN=${DOMAIN}" >> $GITHUB_ENV
 
       - name: Azure login
         uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2.1.1
@@ -141,18 +140,18 @@ jobs:
           hugo-version: ${{env.HUGO_VERSION}}
 
       - name: Build Hugo for PR preview
-        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || steps.deployment.outputs.environment == 'preview')
+        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
         working-directory: ${{inputs.docs_build_path}}
         run: |
           hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
-          hugo --gc -e production --baseURL="https://${{steps.deployment.outputs.domain}}${PREVIEW_URL_PATH}${PR_NUMBER}"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}"
 
       - name: Build Hugo for environment
         working-directory: ${{inputs.docs_build_path}}
-        if: inputs.doc_type == 'hugo' && steps.deployment.outputs.environment != 'preview'
+        if: inputs.doc_type == 'hugo' && env.DEPLOYMENT_ENV != 'preview'
         run: |
           hugo mod get "$THEME_MODULE@v$THEME_VERSION"
-          hugo --gc -e production --baseURL="https://${{steps.deployment.outputs.domain}}$PRODUCTION_URL_PATH"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
 
         ### Sphinx builds
 
@@ -182,7 +181,7 @@ jobs:
 
       - name: Azure upload PR preview
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
-        if: github.event.action == 'synchronize' || github.event.action == 'opened' || steps.deployment.outputs.environment == 'preview'
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
@@ -209,13 +208,13 @@ jobs:
             && az storage blob upload-batch \
                  -s $DOCS_SOURCE_PATH \
                  -d '$web' \
-                 --destination-path "${{steps.deployment.outputs.environment}}/${{github.repository}}/latest/" \
+                 --destination-path "${DEPLOYMENT_ENV}/${{github.repository}}/latest/" \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
                  --overwrite \
                  --auth-mode login
 
             az cdn endpoint purge \
-              --content-paths ${{steps.deployment.outputs.domain}}/* \
+              --content-paths ${DEPLOYMENT_DOMAIN}/* \
               --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
               --name ${{steps.keyvault.outputs.cdnName}} \
               --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
@@ -229,7 +228,7 @@ jobs:
 
       - name: PR preview comment
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        if: github.event.action == 'opened' && steps.deployment.outputs.environment == 'preview'
+        if: github.event.action == 'opened' && env.DEPLOYMENT_ENV == 'preview'
         with:
           script: |
             const previewHostname = process.env.DOMAIN_PREVIEW;
@@ -253,25 +252,17 @@ jobs:
             });
 
       - name: Summary
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        with:
-          script: |
-            const deploymentEnv = "${{steps.deployment.outputs.environment}}";
-            const deploymentDomain = "${{steps.deployment.outputs.domain}}";
+        # TODO(dani): Extract this into a reusable Markdown template for comments and summaries?
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Task | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
+          if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
+            echo "| Preview URL | [https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}/](https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
+          fi
 
-            let table = [
-              ['Environment', `\`${deploymentEnv}\``]
-            ];
-
-            if (deploymentEnv == 'preview') {
-                table.push(['Preview URL', `https://${deploymentDomain}${process.env.PREVIEW_URL_PATH}${process.env.PR_NUMBER}/`]);
-            } else {
-              await core.summary.addTable([
-                table.push(['Deployment URL', `https://${deploymentDomain}${process.env.PRODUCTION_URL_PATH}`])
-              ]).write();
-            }
-
-            await core.summary
-            .addHeading('Deployment Summary', 3)
-            .addTable(table)
-            .write();
+        # TODO(dani): Add more details to the summary
