@@ -153,14 +153,14 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened'
         with:
           inlineScript: |
-            cd ${{inputs.docs_build_path}}/${{inputs.docs_source_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
 
       - name: Azure upload for production
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
         if: env.PR_MERGED == 'true'
         with:
           inlineScript: |
-            cd ${{inputs.docs_build_path}}/${{inputs.docs_source_path}} az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+            cd ${{inputs.docs_build_path}} && az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
 
       - name: Azure purge CDN endpoint
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
