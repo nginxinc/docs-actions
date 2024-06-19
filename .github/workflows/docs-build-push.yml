@@ -251,3 +251,27 @@ jobs:
               repo: context.repo.repo,
               body: body,
             });
+
+      - name: Summary
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const deploymentEnv = "${{steps.deployment.outputs.environment}}";
+            const deploymentDomain = "${{steps.deployment.outputs.domain}}";
+
+            let table = [
+              ['Environment', `\`${deploymentEnv}\``]
+            ];
+
+            if (deploymentEnv == 'preview') {
+                table.push(['Preview URL', `https://${deploymentDomain}${process.env.PREVIEW_URL_PATH}${process.env.PR_NUMBER}/`]);
+            } else {
+              await core.summary.addTable([
+                table.push(['Deployment URL', `https://${deploymentDomain}${process.env.PRODUCTION_URL_PATH}`])
+              ]).write();
+            }
+
+            await core.summary
+            .addHeading('Deployment Summary', 3)
+            .addTable(table)
+            .write();
