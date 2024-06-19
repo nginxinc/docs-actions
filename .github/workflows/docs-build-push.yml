@@ -1,0 +1,170 @@
+name: Docs Build Push
+
+on:
+  workflow_call:
+    secrets:
+      AZURE_CREDENTIALS:
+        required: true
+      AZURE_KEY_VAULT:
+        required: true
+    inputs:
+      production_url_path:
+        description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
+        required: true
+        type: string
+      preview_url_path:
+        description: "Appended to the baseURL for PR preview builds"
+        required: true
+        type: string
+      docs_source_path:
+        description: "Directory of built docs files. Hugo default would be `./public/`"
+        required: true
+        type: string
+      cdn_content_path:
+        description: "The content path to be purged. Change to main docs repo currently requires a full '/*' purge, unless we add logic to determine specifically which docs were updated"
+        required: true
+        type: string
+      doc_type:
+        type: string
+        description: "Type of source docs. Currently supports 'hugo' and 'sphinx'"
+        default: hugo
+
+env:
+  GO_VERISON: "1.21" # Go version used for `hugo mod get`
+  HUGO_VERSION: "0.115.3" # Hugo version used for building docs
+  THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme" # Name of source repo for module. For example; github.com/nginxinc/nginx-hugo-theme
+  THEME_VERSION: "0.41.8" # Version of theme module. For example; 0.41.6
+
+  PR_NUMBER: ${{github.event.pull_request.number}}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Remapping of inputs to envs
+      PRODUCTION_URL_PATH: ${{inputs.production_url_path}}
+      PREVIEW_URL_PATH: ${{inputs.preview_url_path}}
+      DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
+      CDN_CONTENT_PATH: ${{inputs.cdn_content_path}}
+      EVENT_ACTION: ${{github.event.action}}
+      PR_MERGED: ${{github.event_name == 'push' && github.ref == 'refs/heads/main'}}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:
+      - name: Azure login
+        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2.1.1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Retrieve secrets from Keyvault
+        id: keyvault
+        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        with:
+          inlineScript: |
+            secrets_get=(productionHostname previewHostname resourceGroupName cdnProfileName cdnName accountName)
+            for secret_get in ${secrets_get[@]}
+            do
+              value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
+              echo "::add-mask::$value"
+              echo "$secret_get=$value" >> $GITHUB_OUTPUT
+            done
+
+      - name: PR preview comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        if: github.event.action == 'opened'
+        with:
+            script: |
+                const previewHostname = "${{steps.keyvault.outputs.previewHostname}}";
+                const previewUrlPath = process.env.PREVIEW_URL_PATH;
+                const prNumber = context.payload.pull_request.number;
+                const previewUrl = `https://${previewHostname}${previewUrlPath}${prNumber}/`;
+
+                const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
+
+                |  Name | Link |
+                |:-:|------------------------|
+                |<span aria-hidden="true">😎</span> Deploy Preview | [${previewUrl}](${previewUrl}) |
+                ---`;
+
+                await github.rest.issues.createComment({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    body: body,
+                });
+
+      - name: Checkout docs content
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.7.1
+        
+      - name: Setup Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+            go-version: ${{env.GO_VERISON}}
+          # should only run for hugo
+
+        # hugo builds
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@75d2e84710de30f6ff7268e08f310b60ef14033f # v3.0.0
+        if: inputs.doc_type == 'hugo'
+        with:
+            hugo-version: ${{env.HUGO_VERSION}}
+
+      - name: Build Hugo for PR preview
+        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened')
+        run: |
+            hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
+            hugo --gc -e production --baseURL="https://${{steps.keyvault.outputs.previewHostname}}$PREVIEW_URL_PATH$PR_NUMBER"
+
+      - name: Build Hugo for production
+        if: inputs.doc_type == 'hugo' && env.PR_MERGED == 'true'
+        run: |
+            hugo mod get "$THEME_MODULE@v$THEME_VERSION"
+            hugo --gc -e production --baseURL="https://${{steps.keyvault.outputs.productionHostname}}$PRODUCTION_URL_PATH"
+
+        # sphinx builds
+
+      - name: Setup Sphinx
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        if: inputs.doc_type == 'sphinx'
+        with:
+            python-version: '3.9'
+
+      - name: Install python dependencies
+        if: inputs.doc_type == 'sphinx'
+        run: pip install -r requirements.txt
+
+      - name: Setup Gnupg directories
+        if: inputs.doc_type == 'sphinx'
+        run: |
+            mkdir -p /home/runner/.gnupg
+            chmod 700 /home/runner/.gnupg
+
+      - name: Build Sphinx for PR preview and production
+        if: inputs.doc_type == 'sphinx'
+        run: |
+            make deploy
+
+      - name: Azure upload PR preview
+        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        if: github.event.action == 'synchronize' || github.event.action == 'opened'
+        with:
+          inlineScript: |
+            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+
+      - name: Azure upload for production
+        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        if: env.PR_MERGED == 'true'
+        with:
+          inlineScript: |
+            az storage blob upload-batch -s $DOCS_SOURCE_PATH -d '$web' --destination-path "prod/${{github.repository}}/latest/" --account-name ${{steps.keyvault.outputs.accountName}} --overwrite --auth-mode login
+
+      - name: Azure purge CDN endpoint
+        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        with:
+          inlineScript: |
+            az cdn endpoint purge --content-paths $CDN_CONTENT_PATH --profile-name ${{steps.keyvault.outputs.cdnProfileName}} --name ${{steps.keyvault.outputs.cdnName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+
+      - name: Azure logout
+        run: |
+          az logout
+        if: always()
