@@ -80,7 +80,12 @@ jobs:
           fi
 
           if [[ "${DEPLOYMENT_ENV}" == "preview" && -z "${PR_NUMBER}" ]]; then
-            echo "::error::PR_NUMBER is required for preview environment"
+            echo "PR_NUMBER=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+            echo "::notice::PR_NUMBER set to short commit hash: ${GITHUB_SHA::7}"
+          fi
+
+          if [[ -z "${GITHUB_SHA}" ]]; then
+            echo "::error::GITHUB_SHA not set. This shouldn't happen!"
             exit 1
           fi
 
@@ -114,7 +119,7 @@ jobs:
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
         with:
           inlineScript: |
-            secrets_get=(productionHostname previewHostname resourceGroupName cdnProfileName cdnName accountName)
+            secrets_get=(productionHostname resourceGroupName cdnProfileName cdnName accountName)
             for secret_get in ${secrets_get[@]}
             do
               value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
@@ -260,7 +265,7 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
-            echo "| Preview URL | [https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}/](https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
           fi
