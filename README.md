@@ -36,43 +36,64 @@ A repo called `nginxinc/upgraded-octo-umbrella`;
 
 ### Caller example
 
-Full usage examples;
+Place this workflow action in the caller repository (docs, kubernetes-ingress, etc.)
+
+Full usage example taken from the [octo-umbrella](https://github.com/nginxinc/upgraded-octo-umbrella/) test repository:
 ``` yml
+name: Build and deploy (octo-umbrella)
 on:
-  push:
-    branches:
-      - main # Set a branch to deploy
-    paths:
-      - docsDirectory/**
+  # Set up the UI in Actions tab for manual builds.
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Determines where build gets pushed to'
+        required: false
+        default: 'preview'
+        type: choice
+        options:
+        - preview
+        - dev
+        - staging
+        - prod
+
+  # Trigger preview builds on pull requests
   pull_request:
     branches:
       - "*"
-    paths:
-      - docsDirectory/**
 
 jobs:
-
-call-docs-build-push:
+  # Configure the build
+  call-docs-build-push:
     uses: nginxinc/docs-actions/.github/workflows/docs-build-push.yml@main
     with:
-      production_url_path: "/"
-      preview_url_path: "/previews/docs/"
-      docs_source_path: "./public/"
-      cdn_content_path: "/*"
+      production_url_path: "/octo-umbrella/"
+      preview_url_path: "/previews/octo-umbrella/"
+      docs_source_path: "public"
+      docs_build_path: "./"
       doc_type: "hugo"
+      environment: ${{inputs.environment}}
     secrets:
       AZURE_CREDENTIALS: ${{secrets.AZURE_CREDENTIALS}}
       AZURE_KEY_VAULT: ${{secrets.AZURE_KEY_VAULT}}
 ```
 
-Each docs repo has slightly different requirements in terms of inputs, primarily
+Each docs repo has slightly different requirements in terms of inputs, primarily:
 ```yml
-production_url_path: "/rootOfProduct"  (i.e. / for docs , /nginx-gateway-fabric for gateway fabric)
-preview_url_path: "/previews/nameOfProduction/"
-docs_source_path: "./outputDirOfBuiltDocs/"
-cdn_content_path: "/rootOfProduct" or /* for docs
-doc_type: "hugo" (hugo for everything except unit)
+    with:
+      # Where artifacts are sourced after being built
+      docs_source_path: "./outputDirOfBuiltDocs/"
 
+      # Defaults to 'hugo', can be set to 'sphinx' for Unit
+      doc_type: "hugo"
+
+      # Use / for docs, /nginx-gateway-fabric for gateway fabric
+      production_url_path: "/product"
+
+      # Preview URLs should start with /previews/product
+      preview_url_path: "/previews/product/"
+
+      # Or /* for docs
+      cdn_content_path: "/product"
 ```
 The action should only be triggered if there are changes made in a docs related directory. This can be implemented by setting a `path` value in the actions `on` object.
 ```yml
