@@ -58,7 +58,6 @@ jobs:
       PREVIEW_URL_PATH: ${{inputs.preview_url_path}}
       DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
       EVENT_ACTION: ${{github.event.action}}
-      PR_MERGED: ${{github.event_name == 'push' && github.ref == 'refs/heads/main'}}
       DEPLOYMENT_ENV: ${{inputs.environment}}
 
     concurrency:
@@ -206,7 +205,6 @@ jobs:
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
-        if: env.PR_MERGED == 'true'
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
