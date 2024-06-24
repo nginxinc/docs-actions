@@ -205,6 +205,7 @@ jobs:
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        if: env.DEPLOYMENT_ENV != 'preview'
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
