@@ -8,11 +8,14 @@ By default, it will also purge the provided CDN path.
 
 ## Usage
 
-### Prerequisites
+### Security considerations
 `AZURE_CREDENTIALS` need to contain service principal credentials with the following roles assigned;
-- Storage Blob Data Contributor
-- Key Vault Secrets User
-- CDN Endpoint Contributor
+- **Storage Blob Data Contributor**
+- **Key Vault Secrets User**
+- **CDN Endpoint Contributor**
+
+The service principal (or managed identity) references in the AZURE_CREDENTIALS should have _only_ the roles
+listed above. Assigning any more roles is a potential security risk.
 
 `AZURE_KEY_VAULT` should contain the name of a key vault, which contains the following secrets;
 - productionHostname
@@ -22,6 +25,10 @@ By default, it will also purge the provided CDN path.
 - cdnName
 - accountName
 
+The KeyVault should have _only_ these secrets, and nothing else, as other secrets could potentially
+be exposed.
+
+### Prerequisites
 The secrets in AKV allow variables to be shared by all repos contributing to the same base doc sites (as a single source of truth), 
 without needing to duplicate github secrets or variables across different github organisations.
 
@@ -32,6 +39,7 @@ For example;
 A repo called `nginxinc/upgraded-octo-umbrella`;
 - Preview pushed to `$web/nginxinc/upgraded-octo-umbrella/preview/${prNumber}`
 - Production build to `$web/nginxinc/upgraded-octo-umbrella/latest`
+
 
 
 ### Caller example
