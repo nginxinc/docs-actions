@@ -36,19 +36,18 @@ Built files are pushed to a location in Azure Container Storage based on the rep
 
 For example;
 
-A repo called `nginxinc/upgraded-octo-umbrella`;
-- Preview pushed to `$web/nginxinc/upgraded-octo-umbrella/preview/${prNumber}`
-- Production build to `$web/nginxinc/upgraded-octo-umbrella/latest`
+A repo called `foo/bar`;
+- Preview pushed to `$web/foo/bar/preview/${prNumber}`
+- Production build to `$web/foo/bar/latest`
 
 
 
 ### Caller example
 
-Place this workflow action in the caller repository (docs, kubernetes-ingress, etc.)
+Place this workflow action in the caller repository
 
-Full usage example taken from the [octo-umbrella](https://github.com/nginxinc/upgraded-octo-umbrella/) test repository:
 ``` yml
-name: Build and deploy (octo-umbrella)
+name: Build and deploy (foobar)
 on:
   # Set up the UI in Actions tab for manual builds.
   workflow_dispatch:
@@ -74,8 +73,8 @@ jobs:
   call-docs-build-push:
     uses: nginxinc/docs-actions/.github/workflows/docs-build-push.yml@main
     with:
-      production_url_path: "/octo-umbrella/"
-      preview_url_path: "/previews/octo-umbrella/"
+      production_url_path: "/foobar/"
+      preview_url_path: "/previews/foobar/"
       docs_source_path: "public"
       docs_build_path: "./"
       doc_type: "hugo"
