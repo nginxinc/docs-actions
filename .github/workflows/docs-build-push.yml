@@ -148,7 +148,7 @@ jobs:
         working-directory: ${{inputs.docs_build_path}}
         run: |
           hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
-          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}${PR_NUMBER}"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}/${PR_NUMBER}"
 
       - name: Build Hugo for environment
         working-directory: ${{inputs.docs_build_path}}
@@ -197,11 +197,12 @@ jobs:
                  --overwrite \
                  --auth-mode login
 
-            az cdn endpoint purge \
-              --content-paths $PREVIEW_URL_PATH/* \
-              --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-              --name ${{steps.keyvault.outputs.cdnName}} \
-              --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+                 az afd endpoint purge \
+                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
+                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+                  --domains $DOMAIN_PREVIEW \
+                  --content-paths '/*'
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
@@ -217,11 +218,12 @@ jobs:
                  --overwrite \
                  --auth-mode login
 
-            az cdn endpoint purge \
-              --content-paths ${DEPLOYMENT_DOMAIN}/* \
-              --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-              --name ${{steps.keyvault.outputs.cdnName}} \
-              --resource-group ${{steps.keyvault.outputs.resourceGroupName}}
+               az afd endpoint purge \
+                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
+                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+                  --domains $DEPLOYMENT_DOMAIN \
+                  --content-paths '${PRODUCTION_URL_PATH}/*'
 
       - name: Azure logout
         run: |
