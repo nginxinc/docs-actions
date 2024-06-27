@@ -148,14 +148,14 @@ jobs:
         working-directory: ${{inputs.docs_build_path}}
         run: |
           hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
-          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}/${PREVIEW_URL_PATH}/${PR_NUMBER}"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}/${PR_NUMBER}"
 
       - name: Build Hugo for environment
         working-directory: ${{inputs.docs_build_path}}
         if: inputs.doc_type == 'hugo' && env.DEPLOYMENT_ENV != 'preview'
         run: |
           hugo mod get "$THEME_MODULE@v$THEME_VERSION"
-          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}/${PRODUCTION_URL_PATH}"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
 
         ### Sphinx builds
 
@@ -266,9 +266,9 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
-            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}/${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}/${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}/${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
           fi
 
         # TODO(dani): Add more details to the summary
