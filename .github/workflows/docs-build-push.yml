@@ -202,7 +202,7 @@ jobs:
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
                   --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
                   --domains $DOMAIN_PREVIEW \
-                  --content-paths '/*'
+                  --content-paths "${PREVIEW_URL_PATH}/*"
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
@@ -223,7 +223,7 @@ jobs:
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
                   --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
                   --domains $DEPLOYMENT_DOMAIN \
-                  --content-paths '${PRODUCTION_URL_PATH}/*'
+                  --content-paths "${PRODUCTION_URL_PATH}/*"
 
       - name: Azure logout
         run: |
