@@ -118,7 +118,7 @@ jobs:
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
         with:
           inlineScript: |
-            secrets_get=(productionHostname resourceGroupName cdnProfileName cdnName accountName)
+            secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
             for secret_get in ${secrets_get[@]}
             do
               value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
@@ -202,7 +202,8 @@ jobs:
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
                   --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
                   --domains $DOMAIN_PREVIEW \
-                  --content-paths "${PREVIEW_URL_PATH}/*"
+                  --content-paths "${PREVIEW_URL_PATH}/*" \
+                  --no-wait
 
       - name: Azure upload to specified environment
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
@@ -223,7 +224,8 @@ jobs:
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
                   --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
                   --domains $DEPLOYMENT_DOMAIN \
-                  --content-paths "${PRODUCTION_URL_PATH}/*"
+                  --content-paths "${PRODUCTION_URL_PATH}/*" \
+                  --no-wait
 
       - name: Azure logout
         run: |
