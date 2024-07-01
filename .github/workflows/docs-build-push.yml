@@ -39,7 +39,7 @@ env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
   HUGO_VERSION: "0.115.3" # Hugo version used for building docs
   THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme" # Name of source repo for module. For example; github.com/nginxinc/nginx-hugo-theme
-  THEME_VERSION: "0.41.8" # Version of theme module. For example; 0.41.6
+  THEME_VERSION: "0.41.9" # Version of theme module. For example; 0.41.6
 
   PR_NUMBER: ${{github.event.pull_request.number}}
 
