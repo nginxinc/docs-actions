@@ -245,7 +245,7 @@ jobs:
             const previewUrlPath = process.env.PREVIEW_URL_PATH;
             const prNumber = context.payload.pull_request.number;
 
-            const previewUrl = `https://${previewHostname}${previewUrlPath}${prNumber}/`;
+            const previewUrl = `https://${previewHostname}${previewUrlPath}/${prNumber}/`;
 
             const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
 
