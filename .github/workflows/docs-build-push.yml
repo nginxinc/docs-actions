@@ -195,6 +195,7 @@ jobs:
                  --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
                  --overwrite \
+                 --content-cache-control "max-age=3600" \
                  --auth-mode login
 
                  az afd endpoint purge \
@@ -217,6 +218,7 @@ jobs:
                  --destination-path "${DEPLOYMENT_ENV}/${{github.repository}}/latest/" \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
                  --overwrite \
+                 --content-cache-control "max-age=3600" \
                  --auth-mode login
 
                az afd endpoint purge \
