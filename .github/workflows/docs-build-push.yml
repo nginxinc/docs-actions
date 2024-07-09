@@ -238,9 +238,23 @@ jobs:
 
       - name: PR preview comment
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        if: github.event.action == 'opened' && env.DEPLOYMENT_ENV == 'preview'
+        if: env.DEPLOYMENT_ENV == 'preview' && (github.event.action == 'synchronize' || github.event.action == 'opened')
         with:
           script: |
+            // If a comment already exists, skip
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const existingComment = comments.find(comment => comment.user.login === 'github-actions[bot]' && comment.body.includes('Deploy Preview'));
+
+            if (existingComment) {
+              core.info('Preview comment already exists. Skipping...');
+              return;
+            }
+
             const previewHostname = process.env.DOMAIN_PREVIEW;
             const previewUrlPath = process.env.PREVIEW_URL_PATH;
             const prNumber = context.payload.pull_request.number;
