@@ -18,8 +18,6 @@ The service principal (or managed identity) references in the AZURE_CREDENTIALS 
 listed above. Assigning any more roles is a potential security risk.
 
 `AZURE_KEY_VAULT` should contain the name of a key vault, which contains the following secrets;
-- productionHostname
-- previewHostname
 - resourceGroupName
 - cdnProfileName
 - cdnName
