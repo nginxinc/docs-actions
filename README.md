@@ -6,6 +6,23 @@ The action pushes to an Azure Storage Container, and assumed an existing reverse
 
 By default, it will also purge the provided CDN path.
 
+## How to
+
+1. Head to the actions section of your repository, for example https://github.com/yourOrg/yourRepo/actions
+
+1. On the left side, click on Build and deploy (docs)
+![Build and deploy (docs)](/images/build-and-deploy.png "Build and deploy (docs)")
+1. On the right side, you should now see a Run workflow button
+![Run Workflow](/images/run-workflow.png "Run Workflow")
+1. Clicking this will open a menu which lets you select the branch you want to build, and which environment you'd like to deploy to
+1. Preview will generate a custom url for any branch you want, and will be available in the workflow output.
+All builds, regardless of environment, will print a url to the summary.
+![Summary](/images/summary.png "Summary")
+
+Preview URLs wil be added as a comment to PRs automatically.
+
+_note: autodeploy from branch is currently in progress. This docs will be updated when available._
+
 ## Usage
 
 ### Security considerations
