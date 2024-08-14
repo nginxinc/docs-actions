@@ -185,7 +185,6 @@ jobs:
 
       - name: Azure upload PR preview
         uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
-        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
