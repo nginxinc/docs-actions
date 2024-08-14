@@ -39,7 +39,6 @@ env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
   HUGO_VERSION: "0.115.3" # Hugo version used for building docs
   THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme" # Name of source repo for module. For example; github.com/nginxinc/nginx-hugo-theme
-  THEME_VERSION: "0.41.10" # Version of theme module. For example; 0.41.6
 
   PR_NUMBER: ${{github.event.pull_request.number}}
 
@@ -129,6 +128,10 @@ jobs:
       - name: Checkout docs content
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.7.1
 
+      - name: Get latest hugo theme
+        if: inputs.doc_type == 'hugo'
+        run: echo "THEME_VERSION=$(curl -s https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest | jq -r ".tag_name")" >> "$GITHUB_ENV"
+
         ### Hugo builds
 
       - name: Setup Go
@@ -147,14 +150,14 @@ jobs:
         if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
         working-directory: ${{inputs.docs_build_path}}
         run: |
-          hugo mod get -v "$THEME_MODULE@v$THEME_VERSION"
+          hugo mod get -v "$THEME_MODULE@$THEME_VERSION"
           hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}/${PR_NUMBER}"
 
       - name: Build Hugo for environment
         working-directory: ${{inputs.docs_build_path}}
         if: inputs.doc_type == 'hugo' && env.DEPLOYMENT_ENV != 'preview'
         run: |
-          hugo mod get "$THEME_MODULE@v$THEME_VERSION"
+          hugo mod get "$THEME_MODULE@$THEME_VERSION"
           hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
 
         ### Sphinx builds
