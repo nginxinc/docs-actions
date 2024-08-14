@@ -201,7 +201,7 @@ jobs:
                  az afd endpoint purge \
                   --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+                  --endpoint-name ${{steps.keyvault.outputs.cdnNam}} \
                   --domains $DOMAIN_PREVIEW \
                   --content-paths "${PREVIEW_URL_PATH}/*" \
                   --no-wait
