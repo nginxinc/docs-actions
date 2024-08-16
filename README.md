@@ -22,6 +22,8 @@ _note: autodeploy from branch is currently in progress. This docs will be update
 
 ## Usage
 
+_note: This action **will not work** with Pull Requests on forked repositories. GitHub does not allow secrets to be shared with forked Pull Requests. Secrets are required as part of Azure interactions. The "Checks and variables" job stops this action from running on forked repositories._
+
 ### Security considerations
 `AZURE_CREDENTIALS` need to contain service principal credentials with the following roles assigned;
 - **Storage Blob Data Contributor**

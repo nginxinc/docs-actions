@@ -49,7 +49,27 @@ env:
   DOMAIN_PROD: "docs.nginx.com"
 
 jobs:
+  checks:
+    name: Checks and variables
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      forked_workflow: ${{ steps.vars.outputs.forked_workflow }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "forked_workflow=${{ (github.event.pull_request && github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name) || !(startsWith(github.repository, 'nginx/') || startsWith(github.repository, 'nginxinc/')) }}" >> $GITHUB_OUTPUT
+      - name: Output variables
+        run: |
+          echo forked_workflow: ${{ steps.vars.outputs.forked_workflow }}
   build:
+    needs: [checks]
+    if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
     runs-on: ubuntu-latest
     env:
       # Remapping of inputs to envs
