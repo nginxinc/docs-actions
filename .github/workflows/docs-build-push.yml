@@ -34,6 +34,10 @@ on:
         type: string
         description: "Type of source docs. Currently supports 'hugo' and 'sphinx'"
         default: hugo
+      force_hugo_theme_version:
+        type: string
+        description: "Overrides default of latest hugo theme. Useful for testing pre-release versions. Must start with 'v' before version."
+        default: ""
 
 env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
@@ -78,6 +82,7 @@ jobs:
       DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
       EVENT_ACTION: ${{github.event.action}}
       DEPLOYMENT_ENV: ${{inputs.environment}}
+      THEME_VERSION: ${{inputs.force_hugo_theme_version}}
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -149,7 +154,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.7.1
 
       - name: Get latest hugo theme
-        if: inputs.doc_type == 'hugo'
+        if: inputs.doc_type == 'hugo' && inputs.force_hugo_theme_version == ''
         run: echo "THEME_VERSION=$(curl -s https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest | jq -r ".tag_name")" >> "$GITHUB_ENV"
 
         ### Hugo builds
