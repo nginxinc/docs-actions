@@ -38,6 +38,12 @@ on:
         type: string
         description: "Overrides default of latest hugo theme. Useful for testing pre-release versions. Must start with 'v' before version."
         default: ""
+      auto_deploy_branch:
+        type: string
+        description: "A branch specified here will autodeploy to the environment specified in auto_deploy_env. An on.push event for this branch must be specified in caller."
+      auto_deploy_env:
+        type: string
+        description: "Env to which auto_deploy_branch will be deployed to. Preview is not supported."
 
 env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
@@ -55,7 +61,7 @@ env:
 jobs:
   checks:
     name: Checks and variables
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -74,7 +80,7 @@ jobs:
   build:
     needs: [checks]
     if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Remapping of inputs to envs
       PRODUCTION_URL_PATH: ${{inputs.production_url_path}}
@@ -83,10 +89,21 @@ jobs:
       EVENT_ACTION: ${{github.event.action}}
       DEPLOYMENT_ENV: ${{inputs.environment}}
       THEME_VERSION: ${{inputs.force_hugo_theme_version}}
+      AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
+      AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
+      - name: Check and setup auto-deploy
+        # Auto deploy should only trigger when the auto_deploy_branch match the current ref.
+        # We also check if `environment` has already been set, otherwise this flow could cause
+        # manual triggers to deploy to `auto_deploy_env` instead of the one specified in the trigger.
+        if: (inputs.auto_deploy_branch == github.ref_name) && inputs.environment == ''
+        run: |
+          echo "Auto deploy branch ($AUTO_DEPLOY_BRANCH) matches current branch. Attempting autodeploy to $AUTO_DEPLOY_ENV."
+          echo "DEPLOYMENT_ENV=${AUTO_DEPLOY_ENV}" >> $GITHUB_ENV
+
       - name: Validate environment inputs
         run: |
           if [[ -z "${DEPLOYMENT_ENV}" ]]; then
