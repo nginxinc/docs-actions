@@ -82,6 +82,11 @@ on:
     branches:
       - "*"
 
+  # Used for auto deploy builds. This branch _must_ match auto_deploy_branch
+  push:
+    branches:
+      - "main"
+
 jobs:
   # Configure the build
   call-docs-build-push:
@@ -93,6 +98,9 @@ jobs:
       docs_build_path: "./"
       doc_type: "hugo"
       environment: ${{inputs.environment}}
+      # This means, any time there's a push to main, a deployment will automatically be made to dev.
+      auto_deploy_branch: "main"
+      auto_deploy_env: "dev"
     secrets:
       AZURE_CREDENTIALS: ${{secrets.AZURE_CREDENTIALS}}
       AZURE_KEY_VAULT: ${{secrets.AZURE_KEY_VAULT}}
