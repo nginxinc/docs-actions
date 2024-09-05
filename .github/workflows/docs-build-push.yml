@@ -156,7 +156,7 @@ jobs:
 
       - name: Retrieve secrets from Keyvault
         id: keyvault
-        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         with:
           inlineScript: |
             secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
@@ -229,7 +229,7 @@ jobs:
       ### Azure upload
 
       - name: Azure upload PR preview
-        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
@@ -252,7 +252,7 @@ jobs:
                   --no-wait
 
       - name: Azure upload to specified environment
-        uses: azure/cli@965c8d7571d2231a54e321ddd07f7b10317f34d9 # v2.0.0
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: env.DEPLOYMENT_ENV != 'preview'
         with:
           inlineScript: |
