@@ -47,7 +47,7 @@ on:
 
 env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
-  HUGO_VERSION: "0.115.3" # Hugo version used for building docs
+  HUGO_VERSION: "0.134.2" # Hugo version used for building docs
   THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme" # Name of source repo for module. For example; github.com/nginxinc/nginx-hugo-theme
 
   PR_NUMBER: ${{github.event.pull_request.number}}
@@ -187,6 +187,7 @@ jobs:
         if: inputs.doc_type == 'hugo'
         with:
           hugo-version: ${{env.HUGO_VERSION}}
+          extended: true
 
       - name: Build Hugo for PR preview
         if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
