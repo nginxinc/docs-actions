@@ -57,6 +57,7 @@ env:
   DOMAIN_DEV: "docs-dev.nginx.com"
   DOMAIN_STAGING: "docs-staging.nginx.com"
   DOMAIN_PROD: "docs.nginx.com"
+  DOMAIN_UNIT: "unit.nginx.org"
 
 jobs:
   checks:
@@ -132,17 +133,20 @@ jobs:
       - name: Set deployment domain
         id: deployment
         run: |
-          case ${DEPLOYMENT_ENV} in
-            dev)
+          case ${DEPLOYMENT_ENV}/${{github.repository}} in
+            dev/*)
               DOMAIN="${DOMAIN_DEV}"
               ;;
-            staging)
+            staging/*)
               DOMAIN="${DOMAIN_STAGING}"
               ;;
-            prod)
+            prod/nginx/unit-docs)
+              DOMAIN="${DOMAIN_UNIT}"
+              ;;
+            prod/*)
               DOMAIN="${DOMAIN_PROD}"
               ;;
-            preview)
+            preview/*)
               DOMAIN="${DOMAIN_PREVIEW}"
               ;;
           esac
