@@ -195,6 +195,20 @@ jobs:
           hugo-version: ${{env.HUGO_VERSION}}
           extended: true
 
+      - name: Add hugo build info
+        if: inputs.doc_type == 'hugo'
+        run: |
+          timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          cat <<EOF > buildInfo.json
+          {
+              "nginxHugoThemeVersion": "$THEME_MODULE@$THEME_VERSION",
+              "buildDate": "$timestamp"
+          }
+          EOF
+          mkdir -p ${{inputs.docs_build_path}}/static/
+          cp buildInfo.json ${{inputs.docs_build_path}}/static/
+
+
       - name: Build Hugo for PR preview
         if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
         working-directory: ${{inputs.docs_build_path}}
