@@ -100,7 +100,7 @@ jobs:
         # Auto deploy should only trigger when the auto_deploy_branch match the current ref.
         # We also check if `environment` has already been set, otherwise this flow could cause
         # manual triggers to deploy to `auto_deploy_env` instead of the one specified in the trigger.
-        if: (inputs.auto_deploy_branch == github.ref_name) && inputs.environment == ''
+        if: (inputs.auto_deploy_branch == github.ref_name) && inputs.environment == '' && env.DEPLOYMENT_ENV != 'preview'
         run: |
           echo "Auto deploy branch ($AUTO_DEPLOY_BRANCH) matches current branch. Attempting autodeploy to $AUTO_DEPLOY_ENV."
           echo "DEPLOYMENT_ENV=${AUTO_DEPLOY_ENV}" >> $GITHUB_ENV
