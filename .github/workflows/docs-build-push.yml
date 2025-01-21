@@ -183,7 +183,7 @@ jobs:
         ### Hugo builds
 
       - name: Setup Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         if: inputs.doc_type == 'hugo'
         with:
           go-version: ${{env.GO_VERISON}}
@@ -226,7 +226,7 @@ jobs:
         ### Sphinx builds
 
       - name: Setup Sphinx
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         if: inputs.doc_type == 'sphinx'
         with:
           python-version: "3.9"
