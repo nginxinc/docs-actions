@@ -255,13 +255,12 @@ jobs:
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
-            && az storage blob upload-batch \
+            && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
-                 -d '$web' \
-                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 -c '$web' \
+                 -d "dev/${{github.repository}}/previews/${PR_NUMBER}" \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
-                 --overwrite \
-                 --content-cache-control "max-age=3600" \
+                 --delete-destination true \
                  --auth-mode login
 
                  az afd endpoint purge \
