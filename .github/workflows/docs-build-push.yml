@@ -254,9 +254,7 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            
             cd ${{inputs.docs_build_path}} \
-            
             && az storage blob sync \
                  --source $DOCS_SOURCE_PATH \
                  --container '$web' \
