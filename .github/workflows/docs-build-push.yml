@@ -254,14 +254,14 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
+            export AZCOPY_AUTO_LOGIN_TYPE=AZCLI
             cd ${{inputs.docs_build_path}} \
             && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
                  -c '$web' \
                  -d "dev/${{github.repository}}/previews/${PR_NUMBER}" \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
-                 --delete-destination true \
-                 --auth-mode login
+                 --delete-destination true
 
                  az afd endpoint purge \
                   --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
