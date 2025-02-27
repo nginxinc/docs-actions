@@ -250,10 +250,13 @@ jobs:
       ### Azure upload
 
       - name: AzCopy env vars
-        run: |
-          echo "AZCOPY_TENANT_ID=`echo ${{secrets.AZURE_CREDENTIALS}} | jq -r .tenantId`" >> $GITHUB_ENV
-          echo "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
-            
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        id: key
+        with:
+          inlineScript: |
+            key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
+            echo "::add-mask::$key"
+            echo "storageAccountKey=$key" >> $GITHUB_OUTPUT
             
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
@@ -265,7 +268,9 @@ jobs:
                  -s $DOCS_SOURCE_PATH \
                  -c '$web' \
                  -d "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --auth-mode key \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --account-key ${{steps.id.outputs.storageAccountKey}} \
                  --delete-destination true
 
                  az afd endpoint purge \
