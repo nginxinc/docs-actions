@@ -171,6 +171,17 @@ jobs:
               echo "$secret_get=$value" >> $GITHUB_OUTPUT
             done
 
+      - name: az key
+        id: key
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        with:
+          inlineScript: |
+            az account show
+            az storage -h
+            key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
+            echo "::add-mask::$key"
+            echo "storageAccountKey=$key" >> $GITHUB_OUTPUT
+
       - name: Checkout docs content
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
         with:
@@ -248,15 +259,6 @@ jobs:
           make deploy
 
       ### Azure upload
-
-      - name: AzCopy env vars
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
-        id: key
-        with:
-          inlineScript: |
-            key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
-            echo "::add-mask::$key"
-            echo "storageAccountKey=$key" >> $GITHUB_OUTPUT
             
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
