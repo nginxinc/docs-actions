@@ -7,6 +7,8 @@ on:
         required: true
       AZURE_KEY_VAULT:
         required: true
+      TN:
+        required: true
     inputs:
       environment:
         description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
@@ -255,6 +257,7 @@ jobs:
         with:
           inlineScript: |
             export AZCOPY_AUTO_LOGIN_TYPE=AZCLI
+            export AZCOPY_TENANT_ID=${{ secrets.TN }}
             cd ${{inputs.docs_build_path}} \
             && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
