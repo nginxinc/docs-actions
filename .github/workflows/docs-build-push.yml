@@ -177,12 +177,8 @@ jobs:
         with:
           inlineScript: |
             az account show
-            az storage -h
-            key=$(az storage account show-connection-string --name ${{steps.keyvault.outputs.accountName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}})
-            #key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
-            echo "::add-mask::$key"
-            echo "sharedAccessSignature=$key" >> $GITHUB_OUTPUT
-
+            azcopy login
+            
       - name: Checkout docs content
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
         with:
@@ -271,9 +267,8 @@ jobs:
                  -s $DOCS_SOURCE_PATH \
                  -c '$web' \
                  -d "dev/${{github.repository}}/previews/${PR_NUMBER}" \
-                 --auth-mode key \
+                 --auth-mode login \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
-                 --account-key ${{steps.id.outputs.storageAccountKey}} \
                  --delete-destination true
 
                  az afd endpoint purge \
