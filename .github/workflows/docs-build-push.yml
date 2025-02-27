@@ -7,8 +7,6 @@ on:
         required: true
       AZURE_KEY_VAULT:
         required: true
-      AZURE_TENANT_ID:
-        required: true
     inputs:
       environment:
         description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
@@ -94,8 +92,6 @@ jobs:
       THEME_VERSION: ${{inputs.force_hugo_theme_version}}
       AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
       AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
-      AZCOPY_AUTO_LOGIN_TYPE: AZCLI
-      AZCOPY_TENANT_ID: ${{secrets.AZURE_TENANT_ID}}
       
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -253,6 +249,12 @@ jobs:
 
       ### Azure upload
 
+      - name: AzCopy env vars
+        run: |
+          echo "AZCOPY_TENANT_ID=`echo ${{secrets.AZURE_CREDENTIALS}} | jq -r .tenantId` >> $GITHUB_ENV
+          echo "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
+            
+            
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
