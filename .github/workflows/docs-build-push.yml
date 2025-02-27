@@ -7,6 +7,8 @@ on:
         required: true
       AZURE_KEY_VAULT:
         required: true
+      AZURE_TENANT_ID:
+        required: true
     inputs:
       environment:
         description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
@@ -93,7 +95,7 @@ jobs:
       AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
       AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
       AZCOPY_AUTO_LOGIN_TYPE: AZCLI
-      AZCOPY_TENANT_ID: ${{ secrets.TN }}
+      AZCOPY_TENANT_ID: ${{secrets.AZURE_TENANT_ID}}
       
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
