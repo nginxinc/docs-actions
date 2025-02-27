@@ -251,7 +251,7 @@ jobs:
 
       - name: AzCopy env vars
         run: |
-          echo "AZCOPY_TENANT_ID=`echo ${{secrets.AZURE_CREDENTIALS}} | jq -r .tenantId` >> $GITHUB_ENV
+          echo "AZCOPY_TENANT_ID=`echo ${{secrets.AZURE_CREDENTIALS}} | jq -r .tenantId`" >> $GITHUB_ENV
           echo "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
             
             
