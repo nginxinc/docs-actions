@@ -178,9 +178,10 @@ jobs:
           inlineScript: |
             az account show
             az storage -h
-            key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
+            key=$(az storage account show-connection-string --name ${{steps.keyvault.outputs.accountName}} --resource-group ${{steps.keyvault.outputs.resourceGroupName}})
+            #key=$(az storage account keys list --resource-group ${{steps.keyvault.outputs.resourceGroupName}} --account-name ${{steps.keyvault.outputs.accountName}} --query "[0].value" --output tsv)
             echo "::add-mask::$key"
-            echo "storageAccountKey=$key" >> $GITHUB_OUTPUT
+            echo "sharedAccessSignature=$key" >> $GITHUB_OUTPUT
 
       - name: Checkout docs content
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
