@@ -254,13 +254,13 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            az config set extension.dynamic_install_allow_preview=true
+            
             cd ${{inputs.docs_build_path}} \
-            && az storage azcopy blob sync \
+            
+            && az storage blob sync \
                  --source $DOCS_SOURCE_PATH \
                  --container '$web' \
                  --destination "dev/${{github.repository}}/previews/${PR_NUMBER}" \
-                 --auth-mode login \
                  --account-name ${{steps.keyvault.outputs.accountName}}
 
                  az afd endpoint purge \
