@@ -7,8 +7,6 @@ on:
         required: true
       AZURE_KEY_VAULT:
         required: true
-      TN:
-        required: true
     inputs:
       environment:
         description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
