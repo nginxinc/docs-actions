@@ -92,7 +92,9 @@ jobs:
       THEME_VERSION: ${{inputs.force_hugo_theme_version}}
       AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
       AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
-
+      AZCOPY_AUTO_LOGIN_TYPE: AZCLI
+      AZCOPY_TENANT_ID: ${{ secrets.TN }}
+      
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
@@ -254,8 +256,6 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            export AZCOPY_AUTO_LOGIN_TYPE=AZCLI
-            export AZCOPY_TENANT_ID=${{ secrets.TN }}
             cd ${{inputs.docs_build_path}} \
             && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
