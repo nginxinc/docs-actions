@@ -254,7 +254,7 @@ jobs:
           tar -xvf downloadazcopy-v10-linux
           sudo cp ./azcopy_linux_amd64_*/azcopy .
           sudo chmod 755 azcopy
-          export "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
+          echo "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
             
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
@@ -262,6 +262,8 @@ jobs:
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}}
+            env
+            ${GITHUB_WORKSPACE}/azcopy -v
             ${GITHUB_WORKSPACE}/azcopy sync "$DOCS_SOURCE_PATH" "https://${{steps.keyvault.outputs.accountName}}.blob.core.windows.net/${web}/dev/${{github.repository}}/previews/${PR_NUMBER}"
             
                  az afd endpoint purge \
