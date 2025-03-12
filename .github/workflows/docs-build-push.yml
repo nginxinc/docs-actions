@@ -254,12 +254,33 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            cd ${{inputs.docs_build_path}} \
-            && az storage blob sync \
-                 --source $DOCS_SOURCE_PATH \
-                 --container '$web' \
-                 --destination "dev/${{github.repository}}/previews/${PR_NUMBER}" \
-                 --account-name ${{steps.keyvault.outputs.accountName}}
+            cd ${{inputs.docs_build_path}} \                 
+            && az storage blob upload-batch \
+                 -s $DOCS_SOURCE_PATH \
+                 -d '$web' \
+                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}-new" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --content-cache-control "max-age=3600" \
+                 --auth-mode login
+            && az storage fs directory move \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --auth-mode login \
+                 --file-system '$web' \
+                 --name "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --new-directory "dev/${{github.repository}}/previews/${PR_NUMBER}-old" \
+            && az storage fs directory move \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --auth-mode login \
+                 --file-system '$web' \
+                 --name "dev/${{github.repository}}/previews/${PR_NUMBER}-new" \
+                 --new-directory "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+            && az storage fs directory delete \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --auth-mode login \
+                 --file-system '$web' \
+                 --name "dev/${{github.repository}}/previews/${PR_NUMBER}-old" \
+                 --yes
 
                  az afd endpoint purge \
                   --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
