@@ -259,10 +259,7 @@ jobs:
             --auth-mode login \
             --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}" > existing_blobs.txt
             echo "Info about existing blobs"
-            cat existing_blobs.txt | wc -l
-            tail existing_blobs.txt
-            echo "Source"
-            ls $DOCS_SOURCE_PATH
+            cat existing_blobs.txt
             exit 1
 
             
