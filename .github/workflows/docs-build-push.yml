@@ -253,15 +253,27 @@ jobs:
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
+            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
+            srcprefix="$DOCS_SOURCE_PATH"
             az storage blob list \
             --container-name '$web' \
             --account-name ${{steps.keyvault.outputs.accountName}} \
             --auth-mode login \
-            --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}" > existing_blobs.txt
-            echo "Info about existing blobs"
-            cat existing_blobs.txt
-            exit 1
-
+            --prefix "${dstprefix}/" > blobs.txt
+            cat blobs.txt | grep name | cut -d: -f 2 | cut -d'"' -f2 > blobs_paths.txt
+            cat blobs_paths.txt | sed -e "s#${dstprefix}/##g" > blobs_names.txt
+            find ${srcprefix} -type f > local_paths.txt
+            cat local_paths.txt | sed -e "s#${srcprefix}/##g" > local_names.txt
+            grep -Fxv -f local_names.txt blobs_names.txt > delete.txt
+            for file in `cat delete.txt` ; do
+              # we have to remove the file
+              # az storage blob delete \
+              #   --container-name '$web'
+              #   --name ${dstprefix}/${file}
+              #   --account-name ${{steps.keyvault.outputs.accountName}} \
+              #   --auth-mode login
+              echo "${dstprefix}/${file} should be removed"
+            done
             
 
       - name: Azure upload PR preview
