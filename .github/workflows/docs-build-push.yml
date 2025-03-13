@@ -264,24 +264,18 @@ jobs:
                  --content-cache-control "max-age=3600" \
                  --auth-mode login
                  
-      - name: List of esisting blobs
-        id: removefiles
+      - name: Remove excessive files
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-
+            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
+            srcprefix="$DOCS_SOURCE_PATH"
             az storage blob list \
             --container-name '$web' \
             --account-name ${{steps.keyvault.outputs.accountName}} \
             --auth-mode login \
             --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}/" > blobs.txt
-            
-      - name: Remove excessive files
-        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
-        run: |
-            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
-            srcprefix="$DOCS_SOURCE_PATH"
             cat blobs.txt | grep name | cut -d: -f 2 | cut -d'"' -f2 > blobs_paths.txt
             echo "Files in storage: `wc -l blobs_paths.txt`"
             cat blobs_paths.txt | sed -e "s#${dstprefix}/##g" > blobs_names.txt
@@ -295,14 +289,13 @@ jobs:
             cat delete.txt
             for file in `cat delete.txt` ; do
               # we have to remove the file
-              # az storage blob delete \
-              #   --container-name '$web'
-              #   --name ${dstprefix}/${file}
-              #   --account-name ${{steps.keyvault.outputs.accountName}} \
-              #   --auth-mode login
+               az storage blob delete \
+                 --container-name '$web'
+                 --name ${dstprefix}/${file}
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --auth-mode login
               echo "${dstprefix}/${file} should be removed"
-            done
-            
+            done            
 
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
