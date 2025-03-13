@@ -248,6 +248,22 @@ jobs:
           make deploy
 
       ### Azure upload
+      - name: TEST UPLOAD EXCESSIVE FILES
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        with:
+          inlineScript: |
+            mkdir test
+            for i in 1 3 4 5 6 ; do echo file$i > test/file$i; done
+            az storage blob upload-batch \
+                 -s test \
+                 -d '$web' \
+                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --content-cache-control "max-age=3600" \
+                 --auth-mode login
+                 
       - name: List of esisting blobs
         id: removefiles
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
@@ -276,6 +292,7 @@ jobs:
             echo "Names local: `wc -l local_names.txt`"
             grep -Fxv -f local_names.txt blobs_names.txt > delete.txt || true
             echo "Files to delete: `wc -l delete.txt`"
+            cat delete.txt
             for file in `cat delete.txt` ; do
               # we have to remove the file
               # az storage blob delete \
