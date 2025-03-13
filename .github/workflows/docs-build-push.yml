@@ -274,7 +274,7 @@ jobs:
             echo "Files local: `wc -l local_paths.txt`"
             cat local_paths.txt | sed -e "s#${srcprefix}/##g" > local_names.txt
             echo "Names local: `wc -l local_names.txt`"
-            grep -Fxv -f local_names.txt blobs_names.txt > delete.txt
+            grep -Fxv -f local_names.txt blobs_names.txt > delete.txt || true
             echo "Files to delete: `wc -l delete.txt`"
             for file in `cat delete.txt` ; do
               # we have to remove the file
