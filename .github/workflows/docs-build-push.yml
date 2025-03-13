@@ -249,22 +249,33 @@ jobs:
 
       ### Azure upload
       - name: List of esisting blobs
+        id: removefiles
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
-            srcprefix="$DOCS_SOURCE_PATH"
+
             az storage blob list \
             --container-name '$web' \
             --account-name ${{steps.keyvault.outputs.accountName}} \
             --auth-mode login \
-            --prefix "${dstprefix}/" > blobs.txt
+            --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}/" > blobs.txt
+            
+      - name: Remove excessive files
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        run: |
+            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
+            srcprefix="$DOCS_SOURCE_PATH"
             cat blobs.txt | grep name | cut -d: -f 2 | cut -d'"' -f2 > blobs_paths.txt
+            echo "Files in storage: `wc -l blobs_paths.txt`"
             cat blobs_paths.txt | sed -e "s#${dstprefix}/##g" > blobs_names.txt
+            echo "Names in storage: `wc -l blobs_names.txt`"
             find ${srcprefix} -type f > local_paths.txt
+            echo "Files local: `wc -l local_paths.txt`"
             cat local_paths.txt | sed -e "s#${srcprefix}/##g" > local_names.txt
+            echo "Names local: `wc -l local_names.txt`"
             grep -Fxv -f local_names.txt blobs_names.txt > delete.txt
+            echo "Files to delete: `wc -l delete.txt`"
             for file in `cat delete.txt` ; do
               # we have to remove the file
               # az storage blob delete \
