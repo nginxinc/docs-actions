@@ -92,7 +92,7 @@ jobs:
       THEME_VERSION: ${{inputs.force_hugo_theme_version}}
       AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
       AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
-      
+
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
@@ -170,7 +170,7 @@ jobs:
               echo "::add-mask::$value"
               echo "$secret_get=$value" >> $GITHUB_OUTPUT
             done
-            
+
       - name: Checkout docs content
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
         with:
@@ -248,24 +248,40 @@ jobs:
           make deploy
 
       ### Azure upload
-      - name: Install azcopy
-        run: |
-          wget https://aka.ms/downloadazcopy-v10-linux
-          tar -xvf downloadazcopy-v10-linux
-          sudo cp ./azcopy_linux_amd64_*/azcopy .
-          sudo chmod 755 azcopy
-          echo "AZCOPY_AUTO_LOGIN_TYPE=AZCLI" >> $GITHUB_ENV
+      - name: List of esisting blobs
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        with:
+          inlineScript: |
+            az storage blob list \
+            --container-name '$web' \
+            --account-name ${{steps.keyvault.outputs.accountName}} \
+            --auth-mode login \
+            --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}" > existing_blobs.txt
+            echo "Info about existing blobs"
+            cat existing_blobs.txt | wc -l
+            tail existing_blobs.txt
+            echo "Source"
+            ls $DOCS_SOURCE_PATH
+            exit 1
+
             
+
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
-            cd ${{inputs.docs_build_path}}
-            env
-            ${GITHUB_WORKSPACE}/azcopy -v
-            ${GITHUB_WORKSPACE}/azcopy sync "$DOCS_SOURCE_PATH" "https://${{steps.keyvault.outputs.accountName}}.blob.core.windows.net/${web}/dev/${{github.repository}}/previews/${PR_NUMBER}"
-            
+            cd ${{inputs.docs_build_path}} \
+            && az storage blob upload-batch \
+                 -s $DOCS_SOURCE_PATH \
+                 -d '$web' \
+                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --content-cache-control "max-age=3600" \
+                 --auth-mode login
+
                  az afd endpoint purge \
                   --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
                   --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
