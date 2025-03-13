@@ -290,8 +290,8 @@ jobs:
             for file in `cat delete.txt` ; do
               # we have to remove the file
                az storage blob delete \
-                 --container-name '$web'
-                 --name ${dstprefix}/${file}
+                 --container-name '$web' \
+                 --name ${dstprefix}/${file} \
                  --account-name ${{steps.keyvault.outputs.accountName}} \
                  --auth-mode login
               echo "${dstprefix}/${file} should be removed"
