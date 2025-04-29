@@ -44,6 +44,9 @@ on:
       auto_deploy_env:
         type: string
         description: "Env to which auto_deploy_branch will be deployed to. Preview is not supported."
+      node_dep:
+        type: boolean
+        description: "Defines should we run npm ci or not"
 
 env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
@@ -208,6 +211,9 @@ jobs:
           mkdir -p ${{inputs.docs_build_path}}/static/
           cp buildInfo.json ${{inputs.docs_build_path}}/static/
 
+      - name: Setup node deps
+        if: inputs.node_dep == true
+        run: npm ci
 
       - name: Build Hugo for PR preview
         if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
