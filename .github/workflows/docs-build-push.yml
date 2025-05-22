@@ -85,6 +85,8 @@ jobs:
     needs: [checks]
     if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
     runs-on: ubuntu-24.04
+    outputs: 
+      PREVIEW_URL: ${{ steps.summary.outputs.PREVIEW_URL }}
     env:
       # Remapping of inputs to envs
       PRODUCTION_URL_PATH: ${{inputs.production_url_path}}
@@ -349,6 +351,7 @@ jobs:
 
       - name: Summary
         # TODO(dani): Extract this into a reusable Markdown template for comments and summaries?
+        id: summary
         run: |
           echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -357,8 +360,11 @@ jobs:
           echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
             echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/" >> $GITHUB_OUTPUT
           else
             echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}" >> $GITHUB_OUTPUT
           fi
+          
 
         # TODO(dani): Add more details to the summary
