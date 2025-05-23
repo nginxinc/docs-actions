@@ -6,6 +6,13 @@ The action pushes to an Azure Storage Container, and assumed an existing reverse
 
 By default, it will also purge the provided CDN path.
 
+## Hugo theme version
+
+By default, this action will pull the latest _released_ hugo theme from https://github.com/nginxinc/nginx-hugo-theme.
+
+If the `force_hugo_theme_version` is set, it will use the tag, branch or commit specified.
+
+
 ## How-to
 These instructions apply only to NGINX GitHub doc repositories.
 1. Navigate to the actions section of your repository, for example https://github.com/yourOrg/yourRepo/actions
