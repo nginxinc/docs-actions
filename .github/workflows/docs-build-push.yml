@@ -47,7 +47,10 @@ on:
       node_dep:
         type: boolean
         description: "Defines should we run npm ci or not"
-
+    outputs:
+      PREVIEW_URL:
+        description: String representing the URL to preview the build
+        value: ${{ jobs.build.outputs.PREVIEW_URL }}
 env:
   GO_VERISON: "1.21" # Go version used for `hugo mod get`
   HUGO_VERSION: "0.134.2" # Hugo version used for building docs
