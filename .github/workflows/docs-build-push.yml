@@ -186,7 +186,10 @@ jobs:
 
       - name: Get latest hugo theme
         if: inputs.doc_type == 'hugo' && inputs.force_hugo_theme_version == ''
-        run: echo "THEME_VERSION=$(curl -s https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest | jq -r ".tag_name")" >> "$GITHUB_ENV"
+        run: |
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest)
+          echo $RESPONSE
+          echo "THEME_VERSION=$(echo $RESPONSE | jq -r ".tag_name")" >> "$GITHUB_ENV"
 
         ### Hugo builds
 
