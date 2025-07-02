@@ -84,6 +84,16 @@ jobs:
       - name: Output variables
         run: |
           echo forked_workflow: ${{ steps.vars.outputs.forked_workflow }}
+      - name: Check rate limit
+        run: |
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/rate_limit)
+          RATE_REMAINING=$(echo "$RESPONSE" | jq -r ".rate.remaining")
+          echo $RESPONSE
+          if [[ "$RATE_REMAINING" -le 0 ]]; then
+            echo "Rate limit for GitHub API has been exhausted. Failing build..."
+            exit 1
+          fi
+          
   build:
     needs: [checks]
     if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
