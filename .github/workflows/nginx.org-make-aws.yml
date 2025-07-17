@@ -1,0 +1,152 @@
+name: nginx.org build
+
+on:
+  workflow_call:
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
+      AWS_ROLE_NAME_PROD:
+        required: true
+      AWS_ROLE_NAME_STAGING:
+        required: true
+      ALLOWED_USERS:
+        required: true
+    inputs:
+      deployment_env:
+        required: false
+        type: string
+        default: staging
+      url_prod:
+        required: false
+        type: string
+        default: nginx.org/preview
+      url_staging:
+        required: false
+        type: string
+        default: nginx.org/previews
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: 'bash -Eeo pipefail -x {0}'
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-central-1
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxslt1-dev xsltproc libxml2-utils netpbm python-is-python3
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check prod access
+        if: ${{ inputs.deployment_env == 'prod' }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Error: Production deployments are only allowed from the main branch."
+            exit 1
+          fi
+
+          if [ "$GITHUB_REPOSITORY_OWNER" != "nginx" ] && [ "$GITHUB_REPOSITORY_OWNER" != "nginxinc" ]; then
+            echo "Error: This workflow is only allowed in repositories owned by 'nginx' or 'nginxinc'."
+            exit 1
+          fi
+
+          ALLOWED="${{ secrets.ALLOWED_USERS }}"
+          for user in $ALLOWED; do
+            if [ "$GITHUB_ACTOR" == "$user" ]; then
+              echo "User $GITHUB_ACTOR is allowed to deploy to prod"
+              exit 0
+            fi
+          done
+
+          echo "User $GITHUB_ACTOR is NOT allowed to deploy to prod"
+          exit 1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ inputs.deployment_env == 'prod' && secrets.AWS_ROLE_NAME_PROD || secrets.AWS_ROLE_NAME_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine S3 path
+        id: s3path
+        run: |
+          SAFE_REPO="${GITHUB_REPOSITORY//\//-}"
+          if [[ "${{ inputs.deployment_env }}" == "prod" ]]; then
+            BUCKET="nginx-org-prod"
+            PATH_PART="preview"
+            PUBLIC_URL="${{ inputs.url_prod }}"
+          else
+            BUCKET="nginx-org-staging"
+            PATH_PART="previews/${GITHUB_SHA}"
+            PUBLIC_URL="${{ inputs.url_staging }}/${GITHUB_SHA}/"
+          fi
+          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "path=$PATH_PART" >> $GITHUB_OUTPUT
+          echo "s3_uri=s3://$BUCKET/$SAFE_REPO/$PATH_PART/" >> $GITHUB_OUTPUT
+          echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
+          echo "safe_repo=$SAFE_REPO" >> $GITHUB_OUTPUT
+
+      - name: Build site
+        run: |
+          set -e
+          make all
+          make gzip
+          make images
+          make genapi
+          make all
+          make copy NGINX_ORG=www
+          
+          # Verify build output
+          if [ ! -d www ]; then
+            echo "Error: Build did not create www/ directory"
+            exit 1
+          fi
+          
+      - name: Add deployment metadata
+        run: |
+          TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          mkdir -p meta
+          echo "$GITHUB_SHA deployed at $TIMESTAMP" > meta/.deployed.txt
+          {
+            echo "sha=$GITHUB_SHA"
+            echo "repo=$GITHUB_REPOSITORY"
+            echo "actor=$GITHUB_ACTOR"
+            echo "timestamp=$TIMESTAMP"
+          } > meta/.tags.txt
+          cp meta/.deployed.txt www/
+          cp meta/.tags.txt www/
+      
+      - name: Sync www/ to S3
+        run: |
+          aws s3 sync www/ s3://${{ steps.s3path.outputs.bucket }}/${{ steps.s3path.outputs.safe_repo }}/${{ steps.s3path.outputs.path }}/ --delete --exact-timestamps
+
+      - name: Show uploaded files
+        run: |
+          aws s3 ls s3://${{ steps.s3path.outputs.bucket }}/${{ steps.s3path.outputs.safe_repo }}/${{ steps.s3path.outputs.path }}/ --recursive
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Deployment Summary"
+            echo ""
+            echo "| Key             | Value |"
+            echo "|------------------|-------|"
+            echo "| deployment_env  | ${{ inputs.deployment_env }} |"
+            echo "| repository      | $GITHUB_REPOSITORY |"
+            echo "| actor           | $GITHUB_ACTOR |"
+            echo "| commit          | $GITHUB_SHA |"
+            echo "| S3 path         | ${{ steps.s3path.outputs.s3_uri }} |"
+            echo "| Public URL      | ${{ steps.s3path.outputs.public_url }} |"
+          } >> $GITHUB_STEP_SUMMARY
