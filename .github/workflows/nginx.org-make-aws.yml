@@ -5,9 +5,7 @@ on:
     secrets:
       AWS_ACCOUNT_ID:
         required: true
-      AWS_ROLE_NAME_PROD:
-        required: true
-      AWS_ROLE_NAME_STAGING:
+      AWS_ROLE_NAME:
         required: true
       ALLOWED_USERS:
         required: true
@@ -19,12 +17,20 @@ on:
       url_prod:
         required: false
         type: string
-        default: nginx.org/preview
+        default: nginx.org
       url_staging:
         required: false
         type: string
-        default: nginx.org/previews
-
+        default: staging.nginx.org
+      s3_bucket:
+        required: false
+        type: string
+        default: nginx-org-staging
+      aws_region:
+        required: false
+        type: string
+        default: eu-central-1
+  
 permissions:
   contents: read
   id-token: write
@@ -34,13 +40,54 @@ defaults:
     shell: 'bash -Eeo pipefail -x {0}'
 
 jobs:
-  build:
-    name: build
+  check-if-allowed:
+    if: ${{ ( github.repository_owner == 'nginx' || github.repository_owner == 'nginxinc' ) }}
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: eu-central-1
 
     steps:
+      - name: Check if we're in the allowed environment
+        run: |
+          org_found=0
+          event_found=0
+          ref_found=0
+          user_found=0
+          ALLOWED_ORGS="nginx nginxinc"
+          ALLOWED_EVENTS="push workflow_dispatch"
+          ALLOWED_REFS="refs/heads/main"
+          ALLOWED_USERS="${{ secrets.ALLOWED_USERS }}"
+          for org in $ALLOWED_ORGS; do
+            if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
+          done
+          for event in $ALLOWED_EVENTS; do
+            if [ "$event" == "$GITHUB_EVENT_NAME" ]; then event_found=1; fi
+          done
+          for ref in $ALLOWED_REFS; do
+            if [ ${{ inputs.deployment_env }} == 'prod' ]; then
+              if [ "$ref" == "$GITHUB_REF" ]; then ref_found=1; fi
+            else
+              ref_found=1
+            fi
+          done
+          for user in $ALLOWED_USERS; do
+            if [ ${{ inputs.deployment_env }} == 'prod' ]; then
+              if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
+            else
+              user_found=1
+            fi
+          done
+          if [ $org_found$event_found$ref_found$user_found -ne 1111 ]; then
+            echo "Repository owner, event, ref or actor are not explicitely allowed to use this workflow: $GITHUB_REPOSITORY_OWNER, $GITHUB_EVENT_NAME, $GITHUB_REF, $GITHUB_ACTOR"
+            exit 1
+          fi
+          exit 0
+          
+  build-staging:
+    name: build-staging
+    runs-on: ubuntu-latest
+    needs: check-if-allowed
+    if: ${{ inputs.deployment_env == 'staging' }}
+
+    steps:        
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -49,56 +96,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check prod access
-        if: ${{ inputs.deployment_env == 'prod' }}
-        run: |
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "Error: Production deployments are only allowed from the main branch."
-            exit 1
-          fi
-
-          if [ "$GITHUB_REPOSITORY_OWNER" != "nginx" ] && [ "$GITHUB_REPOSITORY_OWNER" != "nginxinc" ]; then
-            echo "Error: This workflow is only allowed in repositories owned by 'nginx' or 'nginxinc'."
-            exit 1
-          fi
-
-          ALLOWED="${{ secrets.ALLOWED_USERS }}"
-          for user in $ALLOWED; do
-            if [ "$GITHUB_ACTOR" == "$user" ]; then
-              echo "User $GITHUB_ACTOR is allowed to deploy to prod"
-              exit 0
-            fi
-          done
-
-          echo "User $GITHUB_ACTOR is NOT allowed to deploy to prod"
-          exit 1
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ inputs.deployment_env == 'prod' && secrets.AWS_ROLE_NAME_PROD || secrets.AWS_ROLE_NAME_STAGING }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_ROLE_NAME }}
+          aws-region: ${{ inputs.aws_region }}
 
-      - name: Determine S3 path
-        id: s3path
-        run: |
-          SAFE_REPO="${GITHUB_REPOSITORY//\//-}"
-          if [[ "${{ inputs.deployment_env }}" == "prod" ]]; then
-            BUCKET="nginx-org-prod"
-            PATH_PART="preview"
-            PUBLIC_URL="${{ inputs.url_prod }}"
-          else
-            BUCKET="nginx-org-staging"
-            PATH_PART="previews/${GITHUB_SHA}"
-            PUBLIC_URL="${{ inputs.url_staging }}/${GITHUB_SHA}/"
-          fi
-          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
-          echo "path=$PATH_PART" >> $GITHUB_OUTPUT
-          echo "s3_uri=s3://$BUCKET/$SAFE_REPO/$PATH_PART/" >> $GITHUB_OUTPUT
-          echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
-          echo "safe_repo=$SAFE_REPO" >> $GITHUB_OUTPUT
-
-      - name: Build site
+      - name: Build
+        if: ${{ inputs.deployment_env == 'staging' }}
         run: |
           set -e
           make all
@@ -113,28 +118,27 @@ jobs:
             echo "Error: Build did not create www/ directory"
             exit 1
           fi
-          
+
       - name: Add deployment metadata
+        if: ${{ inputs.deployment_env == 'staging' }}
         run: |
           TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           mkdir -p meta
           echo "$GITHUB_SHA deployed at $TIMESTAMP" > meta/.deployed.txt
-          {
-            echo "sha=$GITHUB_SHA"
-            echo "repo=$GITHUB_REPOSITORY"
-            echo "actor=$GITHUB_ACTOR"
-            echo "timestamp=$TIMESTAMP"
-          } > meta/.tags.txt
+          echo "actor=$GITHUB_ACTOR repo=$GITHUB_REPOSITORY" >> meta/.deployed.txt
           cp meta/.deployed.txt www/
-          cp meta/.tags.txt www/
-      
+
+      - name: Compute safe repo name
+        id: vars
+        run: |
+          echo "safe_repo=${GITHUB_REPOSITORY//\//-}" >> "$GITHUB_OUTPUT"
+          
       - name: Sync www/ to S3
         run: |
-          aws s3 sync www/ s3://${{ steps.s3path.outputs.bucket }}/${{ steps.s3path.outputs.safe_repo }}/${{ steps.s3path.outputs.path }}/ --delete --exact-timestamps
-
-      - name: Show uploaded files
-        run: |
-          aws s3 ls s3://${{ steps.s3path.outputs.bucket }}/${{ steps.s3path.outputs.safe_repo }}/${{ steps.s3path.outputs.path }}/ --recursive
+          aws s3 sync \
+          www/ \
+          s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/ \
+          --delete --exact-timestamps
 
       - name: Deployment summary
         run: |
@@ -147,6 +151,59 @@ jobs:
             echo "| repository      | $GITHUB_REPOSITORY |"
             echo "| actor           | $GITHUB_ACTOR |"
             echo "| commit          | $GITHUB_SHA |"
-            echo "| S3 path         | ${{ steps.s3path.outputs.s3_uri }} |"
-            echo "| Public URL      | ${{ steps.s3path.outputs.public_url }} |"
+            echo "| Public URL      | https://${{ inputs.url_staging }}/${GITHUB_SHA} |"
+          } >> $GITHUB_STEP_SUMMARY
+          
+  build-prod:
+    name: build-prod
+    runs-on: ubuntu-latest
+    needs: check-if-allowed
+    if: ${{ inputs.deployment_env == 'prod' }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_ROLE_NAME }}
+          aws-region: ${{ inputs.aws_region }}
+      
+      - name: Compute safe repo name
+        id: vars
+        run: |
+          echo "safe_repo=${GITHUB_REPOSITORY//\//-}" >> "$GITHUB_OUTPUT"
+          
+          #      - name: Check prod deployment
+          #        run: |
+          #          DEPLOYED_URL="${{ inputs.url_staging }}/${GITHUB_SHA}/.deployed.txt"
+          #          for i in {1..10}; do
+          #            DEPLOYED_SHA=$(curl -fsSL "$DEPLOYED_URL" 2>/dev/null | awk '{ print $1 }' || echo "")
+          #            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ]; then
+          #              exit 0
+          #            else
+          #              sleep 60
+          #            fi
+          #          done
+          #          
+          #          echo "Error: wrong SHA while requesting $DEPLOYED_URL"
+          #          exit 1
+      
+      - name: Sync www/ to S3
+        run: |
+          aws s3 sync \
+          s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/ \
+          s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/prod/ \
+          --delete --exact-timestamps
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Deployment Summary"
+            echo ""
+            echo "| Key             | Value |"
+            echo "|------------------|-------|"
+            echo "| deployment_env  | ${{ inputs.deployment_env }} |"
+            echo "| repository      | $GITHUB_REPOSITORY |"
+            echo "| actor           | $GITHUB_ACTOR |"
+            echo "| commit          | $GITHUB_SHA |"
+            echo "| Public URL      | https://${{ inputs.url_prod }} |"
           } >> $GITHUB_STEP_SUMMARY
