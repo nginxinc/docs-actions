@@ -134,13 +134,13 @@ jobs:
       - name: Upload staging markers (.deployed.txt)
         run: |
           TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          cat > .deployed.txt <<EOF
-sha=${GITHUB_SHA}
-env=staging
-ts=${TIMESTAMP}
-actor=${GITHUB_ACTOR}
-repo=${GITHUB_REPOSITORY}
-EOF
+          cat > .deployed.txt <<-EOF
+            sha=${GITHUB_SHA}
+            env=staging
+            ts=${TIMESTAMP}
+            actor=${GITHUB_ACTOR}
+            repo=${GITHUB_REPOSITORY}
+          EOF
           aws s3 cp .deployed.txt \
             s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/.deployed.txt
           aws s3 cp .deployed.txt \
@@ -201,13 +201,13 @@ EOF
       - name: Upload prod marker (.deployed.txt)
         run: |
           TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          cat > .deployed.txt <<EOF
-sha=${GITHUB_SHA}
-env=prod
-ts=${TIMESTAMP}
-actor=${GITHUB_ACTOR}
-repo=${GITHUB_REPOSITORY}
-EOF
+          cat > .deployed.txt <<-EOF
+            sha=${GITHUB_SHA}
+            env=prod
+            ts=${TIMESTAMP}
+            actor=${GITHUB_ACTOR}
+            repo=${GITHUB_REPOSITORY}
+          EOF
           aws s3 cp .deployed.txt \
             s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/prod/.deployed.txt
 
