@@ -119,15 +119,6 @@ jobs:
             exit 1
           fi
 
-      - name: Add deployment metadata
-        if: ${{ inputs.deployment_env == 'staging' }}
-        run: |
-          TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          mkdir -p meta
-          echo "$GITHUB_SHA deployed at $TIMESTAMP" > meta/.deployed.txt
-          echo "actor=$GITHUB_ACTOR repo=$GITHUB_REPOSITORY" >> meta/.deployed.txt
-          cp meta/.deployed.txt www/
-
       - name: Compute safe repo name
         id: vars
         run: |
@@ -139,6 +130,21 @@ jobs:
           www/ \
           s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/ \
           --delete --exact-timestamps
+
+      - name: Upload staging markers (.deployed.txt)
+        run: |
+          TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > .deployed.txt <<EOF
+sha=${GITHUB_SHA}
+env=staging
+ts=${TIMESTAMP}
+actor=${GITHUB_ACTOR}
+repo=${GITHUB_REPOSITORY}
+EOF
+          aws s3 cp .deployed.txt \
+            s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/.deployed.txt
+          aws s3 cp .deployed.txt \
+            s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/.deployed.txt
 
       - name: Deployment summary
         run: |
@@ -172,27 +178,38 @@ jobs:
         run: |
           echo "safe_repo=${GITHUB_REPOSITORY//\//-}" >> "$GITHUB_OUTPUT"
           
-          #      - name: Check prod deployment
-          #        run: |
-          #          DEPLOYED_URL="${{ inputs.url_staging }}/${GITHUB_SHA}/.deployed.txt"
-          #          for i in {1..10}; do
-          #            DEPLOYED_SHA=$(curl -fsSL "$DEPLOYED_URL" 2>/dev/null | awk '{ print $1 }' || echo "")
-          #            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ]; then
-          #              exit 0
-          #            else
-          #              sleep 60
-          #            fi
-          #          done
-          #          
-          #          echo "Error: wrong SHA while requesting $DEPLOYED_URL"
-          #          exit 1
-      
+      - name: Wait for staging marker for this SHA
+        run: |
+          set -e
+          S3="s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/.deployed.txt"
+          for i in $(seq 1 10); do
+            if aws s3 cp "$S3" .staging.marker --only-show-errors; then
+              grep -q '^sha=' .staging.marker && grep -q '^env=staging' .staging.marker && exit 0 || true
+            fi
+            sleep 10
+          done
+          echo "staging marker not ready for ${GITHUB_SHA}" >&2
+          exit 1
+
       - name: Sync www/ to S3
         run: |
           aws s3 sync \
           s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/ \
           s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/prod/ \
           --delete --exact-timestamps
+
+      - name: Upload prod marker (.deployed.txt)
+        run: |
+          TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > .deployed.txt <<EOF
+sha=${GITHUB_SHA}
+env=prod
+ts=${TIMESTAMP}
+actor=${GITHUB_ACTOR}
+repo=${GITHUB_REPOSITORY}
+EOF
+          aws s3 cp .deployed.txt \
+            s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/prod/.deployed.txt
 
       - name: Deployment summary
         run: |
