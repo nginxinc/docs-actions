@@ -184,7 +184,7 @@ jobs:
           S3="s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/${GITHUB_SHA}/.deployed.txt"
           for i in $(seq 1 10); do
             if aws s3 cp "$S3" .staging.marker --only-show-errors; then
-              grep -q '^sha=' .staging.marker && grep -q '^env=staging' .staging.marker && exit 0 || true
+              grep -q 'sha=' .staging.marker && grep -q 'env=staging' .staging.marker && exit 0 || true
             fi
             sleep 10
           done
