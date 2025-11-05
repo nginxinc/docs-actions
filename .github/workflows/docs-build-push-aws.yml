@@ -161,23 +161,29 @@ jobs:
 
           echo "DEPLOYMENT_DOMAIN=${DOMAIN}" >> $GITHUB_ENV
 
-      - name: Azure login
-        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+#      - name: Azure login
+#        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+#        with:
+#          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          role-to-assume: arn:aws:iam::${{ AWS_ACCOUNT_ID }}:role/${{ AWS_ROLE_NAME }}
+          aws-region: ${{ AWS_REGION }}
 
-      - name: Retrieve secrets from Keyvault
-        id: keyvault
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
-        with:
-          inlineScript: |
-            secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
-            for secret_get in ${secrets_get[@]}
-            do
-              value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
-              echo "::add-mask::$value"
-              echo "$secret_get=$value" >> $GITHUB_OUTPUT
-            done
+#      - name: Retrieve secrets from Keyvault
+#        id: keyvault
+#        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+#        with:
+#          inlineScript: |
+#            secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
+#            for secret_get in ${secrets_get[@]}
+#            do
+#              value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
+#              echo "::add-mask::$value"
+#              echo "$secret_get=$value" >> $GITHUB_OUTPUT
+#            done
 
       - name: Checkout docs content
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
@@ -262,30 +268,44 @@ jobs:
         run: |
           make deploy
 
-      ### Azure upload
+      ### AWS upload
 
+      - id: make_safe_repo
+        run: echo "safe_repo=${GITHUB_REPOSITORY//\//-}" >> "$GITHUB_OUTPUT"
+        
       - name: Azure upload PR preview
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
-        with:
-          inlineScript: |
-            cd ${{inputs.docs_build_path}} \
-            && az storage blob upload-batch \
-                 -s $DOCS_SOURCE_PATH \
-                 -d '$web' \
-                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
-                 --account-name ${{steps.keyvault.outputs.accountName}} \
-                 --overwrite \
-                 --content-cache-control "max-age=3600" \
-                 --auth-mode login
-
-                 az afd endpoint purge \
-                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
-                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
-                  --domains $DOMAIN_PREVIEW \
-                  --content-paths "${PREVIEW_URL_PATH}/*" \
-                  --no-wait
+        run: |
+          cd ${{inputs.docs_build_path}} \
+          && aws s3 sync \
+          $DOCS_SOURCE_PATH/ \
+          s3://${{ S3_BUCKET_PREVIEW }}/dev/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/ \
+          --delete --exact-timestamps
+      
+#      ### Azure upload
+#
+#      - name: Azure upload PR preview
+#        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+#        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+#        with:
+#          inlineScript: |
+#            cd ${{inputs.docs_build_path}} \
+#            && az storage blob upload-batch \
+#                 -s $DOCS_SOURCE_PATH \
+#                 -d '$web' \
+#                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+#                 --account-name ${{steps.keyvault.outputs.accountName}} \
+#                 --overwrite \
+#                 --content-cache-control "max-age=3600" \
+#                 --auth-mode login
+#
+#                 az afd endpoint purge \
+#                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
+#                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+#                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+#                  --domains $DOMAIN_PREVIEW \
+#                  --content-paths "${PREVIEW_URL_PATH}/*" \
+#                  --no-wait
 
       - name: Azure upload to specified environment
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
