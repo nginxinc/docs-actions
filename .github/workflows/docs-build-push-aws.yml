@@ -100,6 +100,10 @@ jobs:
       THEME_VERSION: ${{inputs.force_hugo_theme_version}}
       AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
       AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
+      AWS_ACCOUNT_ID: ${{ inputs.aws_account_id }}
+      AWS_REGION:     ${{ inputs.aws_region }}
+      AWS_ROLE_NAME:  ${{ inputs.aws_role_name }}
+      S3_BUCKET:      ${{ inputs.s3_bucket }}
 
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -169,8 +173,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ AWS_ACCOUNT_ID }}:role/${{ AWS_ROLE_NAME }}
-          aws-region: ${{ AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
 
 #      - name: Retrieve secrets from Keyvault
 #        id: keyvault
