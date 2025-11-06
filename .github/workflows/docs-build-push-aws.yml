@@ -75,7 +75,7 @@ env:
   PR_NUMBER: ${{github.event.pull_request.number}}
 
   # environments
-  DOMAIN_PREVIEW: "frontdoor-test-docs.nginx.com"
+  DOMAIN_PREVIEW: "preview-docs.nginx.com"
   DOMAIN_DEV: "docs-dev.nginx.com"
   DOMAIN_STAGING: "docs-staging.nginx.com"
   DOMAIN_PROD: "docs.nginx.com"
@@ -406,8 +406,8 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
-            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
-            echo "PREVIEW_URL=https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/" >> $GITHUB_OUTPUT
+            echo "| Preview URL | [https://${DOMAIN_PREVIEW}/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DOMAIN_PREVIEW}/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/" >> $GITHUB_OUTPUT
           else
             echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
             echo "PREVIEW_URL=https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}" >> $GITHUB_OUTPUT
