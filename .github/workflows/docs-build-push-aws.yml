@@ -327,33 +327,33 @@ jobs:
 #                  --content-paths "${PREVIEW_URL_PATH}/*" \
 #                  --no-wait
 
-      - name: Azure upload to specified environment
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
-        if: env.DEPLOYMENT_ENV != 'preview'
-        with:
-          inlineScript: |
-            cd ${{inputs.docs_build_path}} \
-            && az storage blob upload-batch \
-                 -s $DOCS_SOURCE_PATH \
-                 -d '$web' \
-                 --destination-path "${DEPLOYMENT_ENV}/${{github.repository}}/latest/" \
-                 --account-name ${{steps.keyvault.outputs.accountName}} \
-                 --overwrite \
-                 --content-cache-control "max-age=3600" \
-                 --auth-mode login
-
-               az afd endpoint purge \
-                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
-                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
-                  --domains $DEPLOYMENT_DOMAIN \
-                  --content-paths "${PRODUCTION_URL_PATH}/*" \
-                  --no-wait
-
-      - name: Azure logout
-        run: |
-          az logout
-        if: always()
+#      - name: Azure upload to specified environment
+#        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+#        if: env.DEPLOYMENT_ENV != 'preview'
+#        with:
+#          inlineScript: |
+#            cd ${{inputs.docs_build_path}} \
+#            && az storage blob upload-batch \
+#                 -s $DOCS_SOURCE_PATH \
+#                 -d '$web' \
+#                 --destination-path "${DEPLOYMENT_ENV}/${{github.repository}}/latest/" \
+#                 --account-name ${{steps.keyvault.outputs.accountName}} \
+#                 --overwrite \
+#                 --content-cache-control "max-age=3600" \
+#                 --auth-mode login
+#
+#               az afd endpoint purge \
+#                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
+#                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+#                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+#                  --domains $DEPLOYMENT_DOMAIN \
+#                  --content-paths "${PRODUCTION_URL_PATH}/*" \
+#                  --no-wait
+#
+#      - name: Azure logout
+#        run: |
+#          az logout
+#        if: always()
 
       ### PR preview comment
 
