@@ -47,6 +47,22 @@ on:
       node_dep:
         type: boolean
         description: "Defines should we run npm ci or not"
+      aws_account_id:
+        description: "The AWS account owning the S3 bucket"
+        required: true
+        type: string
+      aws_region:
+        description: "The region of S3 bucket"
+        required: true
+        type: string
+      aws_role_name:
+        description: "The role to assume to get an access to S3"
+        required: true
+        type: string
+      s3_bucket:
+        description: "Deploy S3 bucket"
+        required: true
+        type: string
     outputs:
       PREVIEW_URL:
         description: String representing the URL to preview the build
