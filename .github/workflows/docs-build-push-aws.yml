@@ -283,7 +283,7 @@ jobs:
           cd ${{inputs.docs_build_path}} \
           && aws s3 sync \
           $DOCS_SOURCE_PATH/ \
-          s3://${{ S3_BUCKET_PREVIEW }}/dev/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/ \
+          s3://${{ env.S3_BUCKET }}/dev/${{ steps.make_safe_repo.outputs.safe_repo }}/previews/${PR_NUMBER}/ \
           --delete --exact-timestamps
       
 #      ### Azure upload
