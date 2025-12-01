@@ -1,0 +1,142 @@
+name: Hugo Doc Build-Push (Prod/Staging)
+env:
+  GO_VERISON: "1.21" # Go version used for `hugo mod get`
+  HUGO_VERSION: "0.147.8" # Hugo version used for building docs
+  THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme/v2"
+
+on:
+  workflow_call:
+    secrets:
+      AZURE_CREDENTIALS:
+        required: true
+      AZURE_KEY_VAULT:
+        required: true
+    inputs:
+      environment:
+        description: The environment to target, will be passed to hugo deploy
+        required: true
+        default: staging
+        type: string
+
+      domain_target:
+        description: Domain (w/o protocol) of the deployment target, used for CDN purging + staging builds.
+        default: ''
+        type: string
+
+      hugo_theme_version:
+        description: SHA/TAG for theme version to use with this deployment (defaults to latest)
+        required: false
+        type: string
+        default: "latest"
+
+      force:
+        description: Force the deployment if the number of remote files to delete exceeds the limit (256)
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    runs-on: ubuntu-22.04
+    env:
+      THEME_VERSION: ${{ inputs.hugo_theme_version }}
+    steps:
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+        # Retrieve secrets from AKV and writes output as masked GH env vars
+      - name: Retrieve secrets from Keyvault
+        id: keyvault
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        with:
+          inlineScript: |
+            secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
+            for secret_get in ${secrets_get[@]}
+            do
+              value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
+              echo "::add-mask::$value"
+              echo "$secret_get=$value" >> $GITHUB_OUTPUT
+            done
+
+        # When "latest" theme version is passed we want to retrieve the actual tag for buldInfo
+        # Also can be accomplished by inspecting go.mod after hugo mod get "github.com/nginxinc/nginx-hugo-theme/v2@latest"
+      - name: Get latest theme & set build info
+        if: inputs.force_hugo_theme_version == 'latest'
+        run: |
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest)
+          echo $RESPONSE
+          echo "THEME_VERSION=$(echo $RESPONSE | jq -r ".tag_name")" >> "$GITHUB_ENV"
+
+      - name: Add hugo build info
+        run: |
+          timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          cat <<EOF > buildInfo.json
+          {
+              "nginxHugoThemeVersion": "$THEME_MODULE@$THEME_VERSION",
+              "buildDate": "$timestamp"
+          }
+          EOF
+          mkdir -p ./public/static/
+          cp buildInfo.json ./public/static/
+      - name: Checkout docs content
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@75d2e84710de30f6ff7268e08f310b60ef14033f # v3.0.0
+        with:
+          hugo-version: ${{env.HUGO_VERSION}}
+          extended: true
+
+      - name: Build Hugo for staging
+        if: env.DEPLOYMENT_ENV == 'staging'
+        run: |
+          hugo mod get "$THEME_MODULE@$THEME_VERSION"
+          hugo --gc -e staging --baseURL="${{ inputs.domain_target }}"
+
+        # Production builds use the base URL defined in the hugo config, ignoring $DOMAIN_TARGET
+      - name: Build Hugo for staging
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          hugo mod get "$THEME_MODULE@$THEME_VERSION"
+          hugo --gc -e production
+
+      - name: Hugo Deploy to Target (No Force)
+        if: inputs.force == false
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{steps.keyvault.outputs.accountName}}
+        run: hugo deploy ${{ inputs.environment }} --dryRun
+
+      - name: Hugo Deploy to Target (Force)
+        if: inputs.force == true
+        env:
+          AZURE_STORAGE_ACCOUNT: ${{steps.keyvault.outputs.accountName}}
+        run: hugo deploy ${{ inputs.environment }} --dryRun --force
+
+      - name: Purge Target Endpoint
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        with:
+          inlineScript: |                  
+            az afd endpoint purge \
+              --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
+              --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
+              --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+              --domains ${{ inputs.domain_target }} \
+              --content-paths "/*" \
+              --no-wait
+
+      # Even if the job fails, we always want to ensure we've logged out
+      - name: Azure logout
+        run: |
+          az logout
+        if: always()
+
+      
