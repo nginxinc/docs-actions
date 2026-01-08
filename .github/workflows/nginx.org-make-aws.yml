@@ -111,7 +111,9 @@ jobs:
           make images
           make genapi
           make all
+          make dir.map
           make copy NGINX_ORG=www
+          cp dir.map www/
           
           # Verify build output
           if [ ! -d www ]; then
