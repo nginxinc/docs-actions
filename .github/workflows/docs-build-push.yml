@@ -263,6 +263,54 @@ jobs:
           make deploy
 
       ### Azure upload
+      - name: TEST UPLOAD EXCESSIVE FILES
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        with:
+          inlineScript: |
+            mkdir test
+            for i in 1 3 4 5 6 ; do echo file$i > test/file$i; done
+            az storage blob upload-batch \
+                 -s test \
+                 -d '$web' \
+                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --overwrite \
+                 --content-cache-control "max-age=3600" \
+                 --auth-mode login
+                 
+      - name: Remove excessive files
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        with:
+          inlineScript: |
+            dstprefix="dev/${{github.repository}}/previews/${PR_NUMBER}"
+            srcprefix="$DOCS_SOURCE_PATH"
+            az storage blob list \
+            --container-name '$web' \
+            --account-name ${{steps.keyvault.outputs.accountName}} \
+            --auth-mode login \
+            --prefix "dev/${{github.repository}}/previews/${PR_NUMBER}/" > blobs.txt
+            cat blobs.txt | grep name | cut -d: -f 2 | cut -d'"' -f2 > blobs_paths.txt
+            echo "Files in storage: `wc -l blobs_paths.txt`"
+            cat blobs_paths.txt | sed -e "s#${dstprefix}/##g" > blobs_names.txt
+            echo "Names in storage: `wc -l blobs_names.txt`"
+            find ${srcprefix} -type f > local_paths.txt
+            echo "Files local: `wc -l local_paths.txt`"
+            cat local_paths.txt | sed -e "s#${srcprefix}/##g" > local_names.txt
+            echo "Names local: `wc -l local_names.txt`"
+            grep -Fxv -f local_names.txt blobs_names.txt > delete.txt || true
+            echo "Files to delete: `wc -l delete.txt`"
+            cat delete.txt
+            for file in `cat delete.txt` ; do
+              # we have to remove the file
+               az storage blob delete \
+                 --container-name '$web' \
+                 --name ${dstprefix}/${file} \
+                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --auth-mode login
+              echo "${dstprefix}/${file} should be removed"
+            done            
 
       - name: Azure upload PR preview
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
