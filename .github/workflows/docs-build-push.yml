@@ -114,8 +114,6 @@ jobs:
 
       - name: Validate environment inputs
         run: |
-          set -euo pipefail
-
           if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview|staging_techdocs|techdocs)$ ]]; then
             echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview, staging_techdocs, techdocs"
             exit 1
@@ -129,8 +127,6 @@ jobs:
       - name: Set deployment variables
         id: deployment
         run: |
-          set -euo pipefail
-
           # Compute preview state once (used for build/upload/comment)
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]] || [[ "${{ github.event.action }}" == "opened" ]] || [[ "${{ github.event.action }}" == "synchronize" ]]; then
             echo "IS_PREVIEW=true" >> "$GITHUB_ENV"
@@ -183,7 +179,6 @@ jobs:
         uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
         with:
           inlineScript: |
-            set -euo pipefail
             secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
             for secret_get in "${secrets_get[@]}"
             do
@@ -202,7 +197,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
           THEME_VERSION="$(gh api repos/nginxinc/nginx-hugo-theme/releases/latest -q .tag_name)"
           echo "THEME_VERSION=${THEME_VERSION}" >> "$GITHUB_ENV"
 
@@ -220,7 +214,6 @@ jobs:
 
       - name: Add hugo build info
         run: |
-          set -euo pipefail
           timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           cat <<EOF > buildInfo.json
           {
@@ -240,7 +233,6 @@ jobs:
         if: env.IS_PREVIEW == 'true'
         working-directory: ${{ inputs.docs_build_path }}
         run: |
-          set -euo pipefail
           hugo mod get -v "$THEME_MODULE@$THEME_VERSION"
           hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}/${PR_NUMBER}"
 
@@ -248,7 +240,6 @@ jobs:
         if: env.IS_PREVIEW != 'true'
         working-directory: ${{ inputs.docs_build_path }}
         run: |
-          set -euo pipefail
           hugo mod get -v "$THEME_MODULE@$THEME_VERSION"
           hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
 
@@ -258,7 +249,6 @@ jobs:
         if: env.IS_PREVIEW == 'true'
         with:
           inlineScript: |
-            set -euo pipefail
             cd "${{ inputs.docs_build_path }}"
 
             az storage blob upload-batch \
@@ -283,7 +273,6 @@ jobs:
         if: env.IS_PREVIEW != 'true'
         with:
           inlineScript: |
-            set -euo pipefail
             cd "${{ inputs.docs_build_path }}"
 
             az storage blob upload-batch \
