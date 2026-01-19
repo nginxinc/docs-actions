@@ -343,24 +343,20 @@ jobs:
             });
 
       - name: Summary
+        # TODO(dani): Extract this into a reusable Markdown template for comments and summaries?
         id: summary
         run: |
-          set -euo pipefail
-
-          echo "### Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Task | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Deployment environment | \`${DEPLOYMENT_ENV}\` |" >> "$GITHUB_STEP_SUMMARY"
-
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Task | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
           if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
-            DEPLOY_URL="https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/"
-            echo "| Preview URL | [${DEPLOY_URL}](${DEPLOY_URL}) |" >> "$GITHUB_STEP_SUMMARY"
-            echo "PREVIEW_URL=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/" >> $GITHUB_OUTPUT
           else
-            DEPLOY_URL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
-            echo "| Production URL | [${DEPLOY_URL}](${DEPLOY_URL}) |" >> "$GITHUB_STEP_SUMMARY"
-            echo "PREVIEW_URL=" >> "$GITHUB_OUTPUT"
+            echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}" >> $GITHUB_OUTPUT
           fi
 
-          echo "DEPLOY_URL=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+        # TODO(dani): Add more details to the summary
