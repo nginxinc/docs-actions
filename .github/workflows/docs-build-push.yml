@@ -8,7 +8,7 @@ on:
         required: true
     inputs:
       environment:
-        description: "Deployment environment. Must be one of: preview, dev, staging, prod, staging_techdocs, techdocs"
+        description: "Deployment environment. Must be one of: preview, dev, staging, prod, staging_techdocs, prod_techdocs"
         required: false
         default: preview
         type: string
@@ -63,7 +63,7 @@ env:
   DOMAIN_STAGING: "docs-staging.nginx.com"
   DOMAIN_PROD: "docs.nginx.com"
   DOMAIN_STAGING_TECHDOCS: "staging.techdocs.f5.com"
-  DOMAIN_TECHDOCS: "techdocs.f5.com"
+  DOMAIN_PROD_TECHDOCS: "techdocs.f5.com"
 
 jobs:
   checks:
@@ -114,8 +114,8 @@ jobs:
 
       - name: Validate environment inputs
         run: |
-          if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview|staging_techdocs|techdocs)$ ]]; then
-            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview, staging_techdocs, techdocs"
+          if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview|staging_techdocs|prod_techdocs)$ ]]; then
+            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview, staging_techdocs, prod_techdocs"
             exit 1
           fi
 
@@ -152,9 +152,9 @@ jobs:
               DOMAIN="${DOMAIN_STAGING_TECHDOCS}"
               STORAGE_PREFIX="staging_techdocs"
               ;;
-            techdocs)
-              DOMAIN="${DOMAIN_TECHDOCS}"
-              STORAGE_PREFIX="techdocs"
+            prod_techdocs)
+              DOMAIN="${DOMAIN_PROD_TECHDOCS}"
+              STORAGE_PREFIX="prod_techdocs"
               ;;
             preview)
               DOMAIN="${DOMAIN_PREVIEW}"
