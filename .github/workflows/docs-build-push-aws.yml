@@ -1,0 +1,362 @@
+name: Docs Build Push AWS
+
+on:
+  workflow_call:
+    secrets:
+      AZURE_VAULT_CLIENT_ID:
+        required: true
+      AZURE_VAULT_SUBSCRIPTION_ID:
+        required: true
+      AZURE_VAULT_TENANT_ID:
+        required: true
+      DOCS_VAULTNAME:
+        required: true
+    inputs:
+      environment:
+        description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
+        required: false
+        default: preview
+        type: string
+      production_url_path:
+        description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
+        required: true
+        type: string
+      preview_url_path:
+        description: "Appended to the baseURL for PR preview builds"
+        required: true
+        type: string
+      docs_source_path:
+        description: "Directory of built docs files. Hugo default would be `./public/`"
+        required: true
+        type: string
+      docs_build_path:
+        description: "Directory where hugo or sphinx build command should be run from"
+        required: false
+        type: string
+        default: ./
+      doc_type:
+        type: string
+        description: "Type of source docs. Currently supports 'hugo' and 'sphinx'"
+        default: hugo
+      force_hugo_theme_version:
+        type: string
+        description: "Overrides default of latest hugo theme. Useful for testing pre-release versions. Must start with 'v' before version."
+        default: ""
+      auto_deploy_branch:
+        type: string
+        description: "A branch specified here will autodeploy to the environment specified in auto_deploy_env. An on.push event for this branch must be specified in caller."
+      auto_deploy_env:
+        type: string
+        description: "Env to which auto_deploy_branch will be deployed to. Preview is not supported."
+      node_dep:
+        type: boolean
+        description: "Defines should we run npm ci or not"
+    outputs:
+      PREVIEW_URL:
+        description: String representing the URL to preview the build
+        value: ${{ jobs.build.outputs.PREVIEW_URL }}
+
+permissions:
+  id-token: write
+  contents: read
+  
+env:
+  GO_VERISON: "1.21" # Go version used for `hugo mod get`
+  HUGO_VERSION: "0.147.8" # Hugo version used for building docs
+  THEME_MODULE: "github.com/nginxinc/nginx-hugo-theme/v2" # Name of source repo for module. For example; github.com/nginxinc/nginx-hugo-theme
+
+  PR_NUMBER: ${{github.event.pull_request.number}}
+
+  # environments
+  DOMAIN_PREVIEW: "internal-beta-docs.nginx.com"
+  DOMAIN_DEV: "docs-dev.nginx.com"
+  DOMAIN_STAGING: "docs-staging.nginx.com"
+  DOMAIN_PROD: "docs.nginx.com"
+  DOMAIN_UNIT: "unit.nginx.org"
+
+jobs:
+  checks:
+    name: Checks and variables
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      forked_workflow: ${{ steps.vars.outputs.forked_workflow }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "forked_workflow=${{ (github.event.pull_request && github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name) || !(startsWith(github.repository, 'nginx/') || startsWith(github.repository, 'nginxinc/')) }}" >> $GITHUB_OUTPUT
+      - name: Output variables
+        run: |
+          echo forked_workflow: ${{ steps.vars.outputs.forked_workflow }}
+  build:
+    needs: [checks]
+    if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
+    runs-on: ubuntu-24.04
+    # environment is needed for azure key vault federated credentials
+    environment: preview
+    outputs: 
+      PREVIEW_URL: ${{ steps.summary.outputs.PREVIEW_URL }}
+    env:
+      # Remapping of inputs to envs
+      PRODUCTION_URL_PATH: ${{inputs.production_url_path}}
+      PREVIEW_URL_PATH: ${{inputs.preview_url_path}}
+      DOCS_SOURCE_PATH: ${{inputs.docs_source_path}}
+      EVENT_ACTION: ${{github.event.action}}
+      DEPLOYMENT_ENV: ${{inputs.environment}}
+      THEME_VERSION: ${{inputs.force_hugo_theme_version}}
+      AUTO_DEPLOY_BRANCH: ${{inputs.auto_deploy_branch}}
+      AUTO_DEPLOY_ENV: ${{inputs.auto_deploy_env}}
+
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+    steps:      
+      - name: Check and setup auto-deploy
+        # Auto deploy should only trigger when the auto_deploy_branch match the current ref.
+        # We also check if `environment` has already been set, otherwise this flow could cause
+        # manual triggers to deploy to `auto_deploy_env` instead of the one specified in the trigger.
+        if: (inputs.auto_deploy_branch == github.ref_name) && inputs.environment == ''
+        run: |
+          echo "Auto deploy branch ($AUTO_DEPLOY_BRANCH) matches current branch. Attempting autodeploy to $AUTO_DEPLOY_ENV."
+          echo "DEPLOYMENT_ENV=${AUTO_DEPLOY_ENV}" >> $GITHUB_ENV
+
+      - name: Validate environment inputs
+        run: |
+          if [[ -z "${DEPLOYMENT_ENV}" ]]; then
+               # for use in this step
+            export DEPLOYMENT_ENV="preview"
+
+            # for use in subsequent steps
+            echo "DEPLOYMENT_ENV=preview" >> "$GITHUB_ENV"
+          fi
+
+          if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview)$ ]]; then
+            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview"
+            exit 1
+          fi
+
+          if [[ "${DEPLOYMENT_ENV}" == "preview" && -z "${PR_NUMBER}" ]]; then
+            echo "PR_NUMBER=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+            echo "::notice::PR_NUMBER set to short commit hash: ${GITHUB_SHA::7}"
+          fi
+
+          if [[ -z "${GITHUB_SHA}" ]]; then
+            echo "::error::GITHUB_SHA not set. This shouldn't happen!"
+            exit 1
+          fi
+
+      - name: Set deployment domain
+        id: deployment
+        run: |
+          case ${DEPLOYMENT_ENV}/${{github.repository}} in
+            dev/*)
+              DOMAIN="${DOMAIN_DEV}"
+              ;;
+            staging/*)
+              DOMAIN="${DOMAIN_STAGING}"
+              ;;
+            prod/nginx/unit-docs)
+              DOMAIN="${DOMAIN_UNIT}"
+              ;;
+            prod/*)
+              DOMAIN="${DOMAIN_PROD}"
+              ;;
+            preview/*)
+              DOMAIN="${DOMAIN_PREVIEW}"
+              ;;
+          esac
+
+          echo "DEPLOYMENT_DOMAIN=${DOMAIN}" >> $GITHUB_ENV
+
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_VAULT_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_VAULT_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_VAULT_SUBSCRIPTION_ID }}
+
+      - name: Retrieve secrets from Keyvault
+        id: keyvault
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        with:
+          inlineScript: |
+            secrets_get=(AWSAccount AWSRoleName AWSS3Bucket)
+            for secret_get in ${secrets_get[@]}
+            do
+              value=$(az keyvault secret show --name $secret_get --vault-name '${{ secrets.DOCS_VAULTNAME }}' --query value --output tsv)
+              echo "::add-mask::$value"
+              echo "$secret_get=$value" >> $GITHUB_ENV
+            done
+
+      - name: Configure AWS credentials via OIDC (assume role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWSAccount }}:role/${{ env.AWSRoleName }}
+          aws-region: eu-central-1
+
+      - name: Checkout docs content
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
+        with:
+          fetch-depth: 0 # This is required for hugo Lastmod to function properly
+
+      - name: Get latest hugo theme
+        if: inputs.doc_type == 'hugo' && inputs.force_hugo_theme_version == ''
+        run: |
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/nginxinc/nginx-hugo-theme/releases/latest)
+          echo $RESPONSE
+          echo "THEME_VERSION=$(echo $RESPONSE | jq -r ".tag_name")" >> "$GITHUB_ENV"
+
+        ### Hugo builds
+
+      - name: Setup Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        if: inputs.doc_type == 'hugo'
+        with:
+          go-version: ${{env.GO_VERISON}}
+          cache: false
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@75d2e84710de30f6ff7268e08f310b60ef14033f # v3.0.0
+        if: inputs.doc_type == 'hugo'
+        with:
+          hugo-version: ${{env.HUGO_VERSION}}
+          extended: true
+
+      - name: Add hugo build info
+        if: inputs.doc_type == 'hugo'
+        run: |
+          timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          cat <<EOF > buildInfo.json
+          {
+              "nginxHugoThemeVersion": "$THEME_MODULE@$THEME_VERSION",
+              "buildDate": "$timestamp"
+          }
+          EOF
+          mkdir -p ${{inputs.docs_build_path}}/static/
+          cp buildInfo.json ${{inputs.docs_build_path}}/static/
+
+      - name: Setup node deps
+        if: inputs.node_dep == true
+        run: npm ci
+
+      - name: Build Hugo for PR preview
+        if: inputs.doc_type == 'hugo' && (github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview')
+        working-directory: ${{inputs.docs_build_path}}
+        run: |
+          hugo mod get -v "$THEME_MODULE@$THEME_VERSION"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PREVIEW_URL_PATH}/${PR_NUMBER}"
+
+      - name: Build Hugo for environment
+        working-directory: ${{inputs.docs_build_path}}
+        if: inputs.doc_type == 'hugo' && env.DEPLOYMENT_ENV != 'preview'
+        run: |
+          hugo mod get "$THEME_MODULE@$THEME_VERSION"
+          hugo --gc -e production --baseURL="https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}"
+
+        ### Sphinx builds
+
+      - name: Setup Sphinx
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        if: inputs.doc_type == 'sphinx'
+        with:
+          python-version: "3.9"
+
+      - name: Install python dependencies
+        if: inputs.doc_type == 'sphinx'
+        run: pip install -r requirements.txt
+
+      - name: Setup Gnupg directories
+        if: inputs.doc_type == 'sphinx'
+        run: |
+          mkdir -p /home/runner/.gnupg
+          chmod 700 /home/runner/.gnupg
+
+      - name: Build Sphinx for PR preview and production
+        working-directory: ${{inputs.docs_build_path}}
+        if: inputs.doc_type == 'sphinx'
+        run: |
+          make deploy
+
+      ### AWS upload
+
+      - name: Upload to S3
+        if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
+        run: |
+          cd ${{inputs.docs_build_path}}
+          aws s3 sync $DOCS_SOURCE_PATH s3://${AWSS3Bucket}/dev/${{github.repository}}/previews/${PR_NUMBER} --delete
+
+      - name: Upload to S3
+        if: env.DEPLOYMENT_ENV != 'preview'
+        run: |
+          cd ${{inputs.docs_build_path}}
+          aws s3 sync $DOCS_SOURCE_PATH s3://${AWSS3Bucket}/${DEPLOYMENT_ENV}/${{github.repository}}/latest/ --delete
+
+      - name: Azure logout
+        run: |
+          az logout
+        if: always()
+
+      ### PR preview comment
+
+      - name: PR preview comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        if: env.DEPLOYMENT_ENV == 'preview' && (github.event.action == 'synchronize' || github.event.action == 'opened')
+        with:
+          script: |
+            // If a comment already exists, skip
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const existingComment = comments.find(comment => comment.user.login === 'github-actions[bot]' && comment.body.includes('Deploy Preview'));
+
+            if (existingComment) {
+              core.info('Preview comment already exists. Skipping...');
+              return;
+            }
+
+            const previewHostname = process.env.DOMAIN_PREVIEW;
+            const previewUrlPath = process.env.PREVIEW_URL_PATH;
+            const prNumber = context.payload.pull_request.number;
+
+            const previewUrl = `https://${previewHostname}${previewUrlPath}/${prNumber}/`;
+
+            const body = `### <span aria-hidden="true">✅</span> Deploy Preview will be available once build job completes!
+
+            |  Name | Link |
+            |:-:|------------------------|
+            |<span aria-hidden="true">😎</span> Deploy Preview | [${previewUrl}](${previewUrl}) |
+            ---`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
+
+      - name: Summary
+        # TODO(dani): Extract this into a reusable Markdown template for comments and summaries?
+        id: summary
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Task | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment environment | \`${DEPLOYMENT_ENV}\`|" >> $GITHUB_STEP_SUMMARY
+          if [[ "${DEPLOYMENT_ENV}" == "preview" ]]; then
+            echo "| Preview URL | [https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/](https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DOMAIN_PREVIEW}${PREVIEW_URL_PATH}/${PR_NUMBER}/" >> $GITHUB_OUTPUT
+          else
+            echo "| Production URL | [https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}](https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}) |" >> $GITHUB_STEP_SUMMARY
+            echo "PREVIEW_URL=https://${DEPLOYMENT_DOMAIN}${PRODUCTION_URL_PATH}" >> $GITHUB_OUTPUT
+          fi
+          
+
+        # TODO(dani): Add more details to the summary
