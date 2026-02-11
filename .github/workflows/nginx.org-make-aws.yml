@@ -42,16 +42,12 @@ defaults:
     shell: 'bash -Eeo pipefail -x {0}'
 
 jobs:
-  get-secrets:
-    if: ${{ ( github.repository_owner == 'nginx' || github.repository_owner == 'nginxinc' ) }}
+  build-staging:
+    name: build-staging
     runs-on: ubuntu-latest
-    environment: preview
-    outputs:
-      NginxOrgAwsAccountID: ${{ steps.keyvault.outputs.NginxOrgAwsAccountID }}
-      NginxOrgAwsRoleName: ${{ steps.keyvault.outputs.NginxOrgAwsRoleName }}
-      NginxOrgAllowedUsers: ${{ steps.keyvault.outputs.NginxOrgAllowedUsers }}
+    if: ${{ inputs.deployment_env == 'staging' }}
 
-    steps:
+    steps:        
       - name: Azure login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
         with:
@@ -68,8 +64,6 @@ jobs:
             for secret_get in ${secrets_get[@]}
             do
               value=$(az keyvault secret show --name $secret_get --vault-name '${{ secrets.DOCS_VAULTNAME }}' --query value --output tsv)
-              #echo "::add-mask::$value"
-              #echo "$secret_get=$value" >> $GITHUB_OUTPUT
               printf '::add-mask::%s\n' "$value"
               {
                 echo "$secret_get<<EOF"
@@ -77,14 +71,10 @@ jobs:
                 echo "EOF"
               } >> "$GITHUB_OUTPUT"
             done
-  check-if-allowed:
-    if: ${{ ( github.repository_owner == 'nginx' || github.repository_owner == 'nginxinc' ) }}
-    runs-on: ubuntu-latest
-    needs: get-secrets
-    steps:
+
       - name: Check if we're in the allowed environment
         env:
-          ALLOWED_USERS: ${{ needs.get-secrets.outputs.NginxOrgAllowedUsers }}
+          ALLOWED_USERS: ${{ steps.keyvault.outputs.NginxOrgAllowedUsers }}
           DEPLOYMENT_ENV: ${{ inputs.deployment_env }}
         run: |
           org_found=0
@@ -94,7 +84,7 @@ jobs:
           ALLOWED_ORGS="nginx nginxinc"
           ALLOWED_EVENTS="push workflow_dispatch"
           ALLOWED_REFS="refs/heads/main"
-          #USER_LIST="${ALLOWED_USERS//,/ }"
+          USER_LIST="$(printf '%s' "$ALLOWED_USERS" | tr ',\n' '  ')"
           for org in $ALLOWED_ORGS; do
             if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
           done
@@ -108,7 +98,7 @@ jobs:
               ref_found=1
             fi
           done
-          for user in $ALLOWED_USERS; do
+          for user in $USER_LIST; do
             if [ "$DEPLOYMENT_ENV" = "prod" ]; then
               if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
             else
@@ -120,14 +110,7 @@ jobs:
             exit 1
           fi
           exit 0
-          
-  build-staging:
-    name: build-staging
-    runs-on: ubuntu-latest
-    needs: [check-if-allowed, get-secrets]
-    if: ${{ inputs.deployment_env == 'staging' }}
 
-    steps:        
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -139,7 +122,7 @@ jobs:
       - name: Configure AWS credentials via OIDC (assume role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ needs.get-secrets.outputs.NginxOrgAwsAccountID }}:role/${{ needs.get-secrets.outputs.NginxOrgAwsRoleName }}
+          role-to-assume: arn:aws:iam::${{ steps.keyvault.outputs.NginxOrgAwsAccountID }}:role/${{ steps.keyvault.outputs.NginxOrgAwsRoleName }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Build
@@ -207,15 +190,77 @@ jobs:
   build-prod:
     name: build-prod
     runs-on: ubuntu-latest
-    needs: [check-if-allowed, get-secrets]
     if: ${{ inputs.deployment_env == 'prod' }}
 
 
     steps:
+      - name: Azure login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_VAULT_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_VAULT_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_VAULT_SUBSCRIPTION_ID }}
+
+      - name: Retrieve secrets from Keyvault
+        id: keyvault
+        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        with:
+          inlineScript: |
+            secrets_get=(NginxOrgAwsAccountID NginxOrgAwsRoleName NginxOrgAllowedUsers)
+            for secret_get in ${secrets_get[@]}
+            do
+              value=$(az keyvault secret show --name $secret_get --vault-name '${{ secrets.DOCS_VAULTNAME }}' --query value --output tsv)
+              printf '::add-mask::%s\n' "$value"
+              {
+                echo "$secret_get<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+            done
+
+      - name: Check if we're in the allowed environment
+        env:
+          ALLOWED_USERS: ${{ steps.keyvault.outputs.NginxOrgAllowedUsers }}
+          DEPLOYMENT_ENV: ${{ inputs.deployment_env }}
+        run: |
+          org_found=0
+          event_found=0
+          ref_found=0
+          user_found=0
+          ALLOWED_ORGS="nginx nginxinc"
+          ALLOWED_EVENTS="push workflow_dispatch"
+          ALLOWED_REFS="refs/heads/main"
+          USER_LIST="$(printf '%s' "$ALLOWED_USERS" | tr ',\n' '  ')"
+          for org in $ALLOWED_ORGS; do
+            if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
+          done
+          for event in $ALLOWED_EVENTS; do
+            if [ "$event" == "$GITHUB_EVENT_NAME" ]; then event_found=1; fi
+          done
+          for ref in $ALLOWED_REFS; do
+            if [ "$DEPLOYMENT_ENV" = "prod" ]; then
+              if [ "$ref" == "$GITHUB_REF" ]; then ref_found=1; fi
+            else
+              ref_found=1
+            fi
+          done
+          for user in $USER_LIST; do
+            if [ "$DEPLOYMENT_ENV" = "prod" ]; then
+              if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
+            else
+              user_found=1
+            fi
+          done
+          if [ $org_found$event_found$ref_found$user_found -ne 1111 ]; then
+            echo "Repository owner, event, ref or actor are not explicitely allowed to use this workflow: $GITHUB_REPOSITORY_OWNER, $GITHUB_EVENT_NAME, $GITHUB_REF, $GITHUB_ACTOR"
+            exit 1
+          fi
+          exit 0
+
       - name: Configure AWS credentials via OIDC (assume role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ needs.get-secrets.outputs.NginxOrgAwsAccountID }}:role/${{ needs.get-secrets.outputs.NginxOrgAwsRoleName }}
+          role-to-assume: arn:aws:iam::${{ steps.keyvault.outputs.NginxOrgAwsAccountID }}:role/${{ steps.keyvault.outputs.NginxOrgAwsRoleName }}
           aws-region: ${{ inputs.aws_region }}
       
       - name: Compute safe repo name
