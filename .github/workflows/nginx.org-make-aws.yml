@@ -87,20 +87,20 @@ jobs:
           ALLOWED_REFS="refs/heads/main"
           ALLOWED_USERS="${{ needs.get-secrets.outputs.NginxOrgAllowedUsers }}"
           ALLOWED_USERS="${ALLOWED_USERS//,/ }"
-          for org in "$ALLOWED_ORGS"; do
+          for org in $ALLOWED_ORGS; do
             if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
           done
-          for event in "$ALLOWED_EVENTS"; do
+          for event in $ALLOWED_EVENTS; do
             if [ "$event" == "$GITHUB_EVENT_NAME" ]; then event_found=1; fi
           done
-          for ref in "$ALLOWED_REFS"; do
+          for ref in $ALLOWED_REFS; do
             if [ "${{ inputs.deployment_env }}" = "prod" ]; then
               if [ "$ref" == "$GITHUB_REF" ]; then ref_found=1; fi
             else
               ref_found=1
             fi
           done
-          for user in "$ALLOWED_USERS"; do
+          for user in $ALLOWED_USERS; do
             if [ "${{ inputs.deployment_env }}" = "prod" ]; then
               if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
             else
