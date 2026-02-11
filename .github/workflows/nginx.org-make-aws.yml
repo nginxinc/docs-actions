@@ -68,8 +68,14 @@ jobs:
             for secret_get in ${secrets_get[@]}
             do
               value=$(az keyvault secret show --name $secret_get --vault-name '${{ secrets.DOCS_VAULTNAME }}' --query value --output tsv)
-              echo "::add-mask::$value"
-              echo "$secret_get=$value" >> $GITHUB_OUTPUT
+              #echo "::add-mask::$value"
+              #echo "$secret_get=$value" >> $GITHUB_OUTPUT
+              printf '::add-mask::%s\n' "$value"
+              {
+                echo "$secret_get<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
             done
   check-if-allowed:
     if: ${{ ( github.repository_owner == 'nginx' || github.repository_owner == 'nginxinc' ) }}
