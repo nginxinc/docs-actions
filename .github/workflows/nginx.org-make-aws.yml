@@ -68,7 +68,7 @@ jobs:
             for secret_get in ${secrets_get[@]}
             do
               value=$(az keyvault secret show --name $secret_get --vault-name '${{ secrets.DOCS_VAULTNAME }}' --query value --output tsv)
-              echo "::add-mask::$value" #suitable for one-line secrets only
+              #echo "::add-mask::$value" #suitable for one-line secrets only
               echo "$secret_get=$value" >> $GITHUB_OUTPUT
             done
   check-if-allowed:
