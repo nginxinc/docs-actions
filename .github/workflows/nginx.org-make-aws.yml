@@ -77,6 +77,9 @@ jobs:
     needs: get-secrets
     steps:
       - name: Check if we're in the allowed environment
+        env:
+          ALLOWED_USERS: ${{ needs.get-secrets.outputs.NginxOrgAllowedUsers }}
+          DEPLOYMENT_ENV: ${{ inputs.deployment_env }}
         run: |
           org_found=0
           event_found=0
@@ -85,7 +88,6 @@ jobs:
           ALLOWED_ORGS="nginx nginxinc"
           ALLOWED_EVENTS="push workflow_dispatch"
           ALLOWED_REFS="refs/heads/main"
-          ALLOWED_USERS="${{ needs.get-secrets.outputs.NginxOrgAllowedUsers }}"
           ALLOWED_USERS="${ALLOWED_USERS//,/ }"
           for org in $ALLOWED_ORGS; do
             if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
@@ -94,14 +96,14 @@ jobs:
             if [ "$event" == "$GITHUB_EVENT_NAME" ]; then event_found=1; fi
           done
           for ref in $ALLOWED_REFS; do
-            if [ "${{ inputs.deployment_env }}" = "prod" ]; then
+            if [ "$DEPLOYMENT_ENV" = "prod" ]; then
               if [ "$ref" == "$GITHUB_REF" ]; then ref_found=1; fi
             else
               ref_found=1
             fi
           done
           for user in $ALLOWED_USERS; do
-            if [ "${{ inputs.deployment_env }}" = "prod" ]; then
+            if [ "$DEPLOYMENT_ENV" = "prod" ]; then
               if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
             else
               user_found=1
@@ -181,13 +183,15 @@ jobs:
             s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/staging/.deployed.txt
 
       - name: Deployment summary
+        env:
+          DEPLOYMENT_ENV: ${{ inputs.deployment_env }}
         run: |
           {
             echo "### Deployment Summary"
             echo ""
             echo "| Key             | Value |"
             echo "|------------------|-------|"
-            echo "| deployment_env  | ${{ inputs.deployment_env }} |"
+            echo "| deployment_env  | $DEPLOYMENT_ENV |"
             echo "| repository      | $GITHUB_REPOSITORY |"
             echo "| actor           | $GITHUB_ACTOR |"
             echo "| commit          | $GITHUB_SHA |"
@@ -247,13 +251,15 @@ jobs:
             s3://${{ inputs.s3_bucket }}/${{ steps.vars.outputs.safe_repo }}/prod/.deployed.txt
 
       - name: Deployment summary
+        env:
+          DEPLOYMENT_ENV: ${{ inputs.deployment_env }}
         run: |
           {
             echo "### Deployment Summary"
             echo ""
             echo "| Key             | Value |"
             echo "|------------------|-------|"
-            echo "| deployment_env  | ${{ inputs.deployment_env }} |"
+            echo "| deployment_env  | $DEPLOYMENT_ENV |"
             echo "| repository      | $GITHUB_REPOSITORY |"
             echo "| actor           | $GITHUB_ACTOR |"
             echo "| commit          | $GITHUB_SHA |"
