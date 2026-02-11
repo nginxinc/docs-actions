@@ -88,7 +88,7 @@ jobs:
           ALLOWED_ORGS="nginx nginxinc"
           ALLOWED_EVENTS="push workflow_dispatch"
           ALLOWED_REFS="refs/heads/main"
-          ALLOWED_USERS="${ALLOWED_USERS//,/ }"
+          USER_LIST="${ALLOWED_USERS//,/ }"
           for org in $ALLOWED_ORGS; do
             if [ "$org" == "$GITHUB_REPOSITORY_OWNER" ]; then org_found=1; fi
           done
@@ -102,7 +102,7 @@ jobs:
               ref_found=1
             fi
           done
-          for user in $ALLOWED_USERS; do
+          for user in $USER_LIST; do
             if [ "$DEPLOYMENT_ENV" = "prod" ]; then
               if [ "$user" == "$GITHUB_ACTOR" ]; then user_found=1; fi
             else
