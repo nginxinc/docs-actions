@@ -142,10 +142,6 @@ on:
 .......
 ```
 
-## nginx.org branch
-
-The `nginx.org` branch contains additional workflows and actions for building and deploying the [nginx.org](https://nginx.org) website to AWS S3.
-
 ### az-sync action
 
 **Path:** `.github/actions/az-sync/action.yml`
@@ -160,7 +156,7 @@ A reusable composite action that logs into Azure, retrieves secrets from an Azur
 | `az_tenant_id` | Azure Tenant ID | Yes | — |
 | `az_subscription_id` | Azure Subscription ID | Yes | — |
 | `keyvault` | Name of the Azure Key Vault to read secrets from | Yes | — |
-| `secrets-filter` | Comma-separated list of secret name patterns to sync | Yes | `*` |
+| `secrets-filter` | Comma-separated list (no spaces) of secret name patterns to sync | Yes | `*` |
 
 #### Usage example
 
@@ -248,7 +244,7 @@ on:
 
 jobs:
   call-nginx-org-build:
-    uses: nginxinc/docs-actions/.github/workflows/nginx.org-make-aws.yml@nginx.org
+    uses: nginxinc/docs-actions/.github/workflows/nginx.org-make-aws.yml@main
     with:
       deployment_env: ${{ inputs.deployment_env || 'staging' }}
     secrets:
