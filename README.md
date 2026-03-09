@@ -2,6 +2,7 @@
 1. [docs-actions](#docs-actions)
 1. [Hugo theme version](#hugo-theme-version)
 1. [az-sync-action](#az-sync-action)
+1. [nginx.org-make-aws workflow](nginxorg-make-aws-workflow)
 
 
 # docs-actions
@@ -194,4 +195,90 @@ A reusable composite action written by s.breen that logs into Azure, retrieves s
 Each matched secret is exported as an environment variable named after the secret (e.g. `MySecret1`). Multiline secret values are handled using the heredoc syntax supported by `$GITHUB_ENV`.
 
 ---
+# nginx.org-make-aws workflow
 
+**Path:** `.github/workflows/nginx.org-make-aws.yml`
+
+A reusable (`workflow_call`) workflow that builds the nginx.org website using `make` and deploys it to AWS S3. It supports two separate jobs controlled by the `deployment_env` input:
+
+- **`build-staging`** — Builds the site from source and syncs the output to a versioned staging path in S3 (`staging/<sha>/`). Also uploads a `.deployed.txt` marker file used by the production job.
+- **`build-prod`** — Waits for the staging marker to be present for the current commit SHA, then promotes the staged build to the production S3 path (`prod/`).
+
+Both jobs use the [az-sync](#az-sync-action) action to retrieve AWS credentials from Azure Key Vault before assuming an AWS IAM role via OIDC.
+
+## How-to
+These instructions apply only to NGINX GitHub doc repositories.
+1. Navigate to the actions section
+1. On the left side of the page, select Deploy nginx.org
+1. Click a "Run workflow" button.
+1. Select select propper "Deployment environment" and press "Run workflow"
+The non-prod builds print an URL for the preview which is available in 3-5 minutes. 
+![Summary](/images/nginx.org.png "nginx.org deploy")
+
+## Secrets
+
+| Secret | Description | Required |
+|---|---|---|
+| `AZURE_VAULT_CLIENT_ID` | Azure Client ID for Key Vault access | Yes |
+| `AZURE_VAULT_SUBSCRIPTION_ID` | Azure Subscription ID | Yes |
+| `AZURE_VAULT_TENANT_ID` | Azure Tenant ID | Yes |
+| `DOCS_VAULTNAME` | Name of the Azure Key Vault containing AWS credentials | Yes |
+
+The Key Vault referenced by `DOCS_VAULTNAME` must contain the following secrets:
+
+| Key Vault secret | Description |
+|---|---|
+| `NginxOrgAwsAccountID` | AWS account ID used to construct the IAM role ARN |
+| `NginxOrgAwsRoleName` | AWS IAM role name to assume via OIDC |
+| `NginxOrgAllowedUsers` | Comma-separated list of GitHub usernames allowed to trigger production deployments |
+
+## Inputs
+
+| Input | Description | Required | Default |
+|---|---|---|---|
+| `deployment_env` | Target environment: `staging` or `prod` | No | `staging` |
+| `url_prod` | Public hostname for the production site | No | `nginx.org` |
+| `url_staging` | Public hostname for the staging site | No | `staging.nginx.org` |
+| `s3_bucket` | S3 bucket name for deployments | No | `nginx-org-staging` |
+| `aws_region` | AWS region for S3 operations | No | `eu-central-1` |
+
+## Access controls
+
+Both jobs verify that the workflow is triggered from an allowed context before proceeding:
+
+- **Organization**: `nginx` or `nginxinc`
+- **Event**: `push` or `workflow_dispatch`
+- **Ref** (prod only): `refs/heads/main`
+- **Actor** (prod only): must be listed in the `NginxOrgAllowedUsers` Key Vault secret
+
+## Caller example
+
+```yml
+name: nginx.org build and deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deployment_env:
+        description: 'Target environment'
+        required: false
+        default: staging
+        type: choice
+        options:
+          - staging
+          - prod
+
+jobs:
+  call-nginx-org-build:
+    uses: nginxinc/docs-actions/.github/workflows/nginx.org-make-aws.yml@main
+    with:
+      deployment_env: ${{ inputs.deployment_env || 'staging' }}
+    secrets:
+      AZURE_VAULT_CLIENT_ID: ${{ secrets.AZURE_VAULT_CLIENT_ID }}
+      AZURE_VAULT_SUBSCRIPTION_ID: ${{ secrets.AZURE_VAULT_SUBSCRIPTION_ID }}
+      AZURE_VAULT_TENANT_ID: ${{ secrets.AZURE_VAULT_TENANT_ID }}
+      DOCS_VAULTNAME: ${{ secrets.DOCS_VAULTNAME }}
+```
