@@ -1,3 +1,9 @@
+# Table of contents
+1. [docs-actions](#docs-actions)
+1. [Hugo theme version](#hugo-theme-version)
+1. [az-sync-action](#az-sync-action)
+
+
 # docs-actions
 
 This repo contains actions for building and deploying, hugo and sphinx based documentation websites for NGINX.
@@ -140,3 +146,52 @@ on:
     paths:
       - docsDirectory/**
 .......
+```
+
+# az-sync action
+
+**Path:** `.github/actions/az-sync/action.yml`
+
+A reusable composite action written by s.breen that logs into Azure, retrieves secrets from an Azure Key Vault, and exports them as environment variables for use in subsequent workflow steps. After all secrets are synced, it logs out of Azure automatically.
+
+## Inputs
+
+| Input | Description | Required | Default |
+|---|---|---|---|
+| `az_client_id` | Azure Client ID (for OIDC federated login) | Yes | — |
+| `az_tenant_id` | Azure Tenant ID | Yes | — |
+| `az_subscription_id` | Azure Subscription ID | Yes | — |
+| `keyvault` | Name of the Azure Key Vault to read secrets from | Yes | — |
+| `secrets-filter` | Comma-separated list (no spaces) of secret name patterns to sync | Yes | `*` |
+
+## Usage example
+
+```yml
+- name: Get Secrets from Azure Key Vault
+  # Always use full path while adding into called workflow
+  uses: nginxinc/docs-actions/.github/actions/az-sync
+  with:
+    az_client_id: ${{ secrets.AZURE_VAULT_CLIENT_ID }}
+    az_tenant_id: ${{ secrets.AZURE_VAULT_TENANT_ID }}
+    az_subscription_id: ${{ secrets.AZURE_VAULT_SUBSCRIPTION_ID }}
+    keyvault: ${{ secrets.DOCS_VAULTNAME }}
+    secrets-filter: 'MySecret1,MySecret2'
+
+- name: Using secrets
+    env:
+      MySecret1: ${{ env.MySecret1 }}
+      MySecret2: ${{ env.MySecret2 }}
+    run: |
+      ...
+
+- name: Configure AWS credentials via OIDC (assume role)
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::${{ env.MySecret1 }}:role/${{ env.MySecret1 }}
+      aws-region: eu-central-1
+```
+
+Each matched secret is exported as an environment variable named after the secret (e.g. `MySecret1`). Multiline secret values are handled using the heredoc syntax supported by `$GITHUB_ENV`.
+
+---
+
