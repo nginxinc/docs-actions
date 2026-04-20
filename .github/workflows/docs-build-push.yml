@@ -3,7 +3,11 @@ name: Docs Build Push
 on:
   workflow_call:
     secrets:
-      AZURE_CREDENTIALS:
+      OIDC_CLIENT_ID:
+        required: true
+      OIDC_TENANT_ID:
+        required: true
+      OIDC_SUBSCRIPTION_ID:
         required: true
       AZURE_KEY_VAULT:
         required: true
@@ -88,6 +92,10 @@ jobs:
     needs: [checks]
     if: ${{ needs.checks.outputs.forked_workflow == 'false' }}
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
     outputs: 
       PREVIEW_URL: ${{ steps.summary.outputs.PREVIEW_URL }}
     env:
@@ -162,25 +170,21 @@ jobs:
           echo "DEPLOYMENT_DOMAIN=${DOMAIN}" >> $GITHUB_ENV
 
       - name: Azure login
-        uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.OIDC_CLIENT_ID }}
+          tenant-id: ${{ secrets.OIDC_TENANT_ID }}
+          subscription-id: ${{ secrets.OIDC_SUBSCRIPTION_ID }}
 
-      - name: Retrieve secrets from Keyvault
-        id: keyvault
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+      - name: Retrieve secrets from keyvault
+        uses: nginx/ci-self-hosted/.github/actions/get-from-vault@refs/heads/main
         with:
-          inlineScript: |
-            secrets_get=(resourceGroupName cdnProfileName cdnName accountName)
-            for secret_get in ${secrets_get[@]}
-            do
-              value=$(az keyvault secret show --name $secret_get --vault-name ${{ secrets.AZURE_KEY_VAULT }} --query value --output tsv)
-              echo "::add-mask::$value"
-              echo "$secret_get=$value" >> $GITHUB_OUTPUT
-            done
+          vault-name: ${{ secrets.AZURE_KEY_VAULT }}
+          secret-names: resourceGroupName, cdnProfileName, cdnName, accountName
+          env-names: AZ_RESOURCE_GROUP, AZ_CDN_PROFILE, AZ_CDN, AZ_ACCOUNT
 
       - name: Checkout docs content
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.7.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0 # This is required for hugo Lastmod to function properly
 
@@ -194,7 +198,7 @@ jobs:
         ### Hugo builds
 
       - name: Setup Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         if: inputs.doc_type == 'hugo'
         with:
           go-version: ${{env.GO_VERISON}}
@@ -265,7 +269,7 @@ jobs:
       ### Azure upload
 
       - name: Azure upload PR preview
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3.0.0
         if: github.event.action == 'synchronize' || github.event.action == 'opened' || env.DEPLOYMENT_ENV == 'preview'
         with:
           inlineScript: |
@@ -274,15 +278,15 @@ jobs:
                  -s $DOCS_SOURCE_PATH \
                  -d '$web' \
                  --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
-                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --account-name ${{ env.AZ_ACCOUNT }} \
                  --overwrite \
                  --content-cache-control "max-age=3600" \
                  --auth-mode login
 
                  az afd endpoint purge \
-                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
-                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+                  --resource-group ${{ env.AZ_RESOURCE_GROUP }} \
+                  --profile-name ${{ env.AZ_CDN_PROFILE }} \
+                  --endpoint-name ${{ env.AZ_CDN }} \
                   --domains $DOMAIN_PREVIEW \
                   --content-paths "${PREVIEW_URL_PATH}/*" \
                   --no-wait
@@ -297,15 +301,15 @@ jobs:
                  -s $DOCS_SOURCE_PATH \
                  -d '$web' \
                  --destination-path "${DEPLOYMENT_ENV}/${{github.repository}}/latest/" \
-                 --account-name ${{steps.keyvault.outputs.accountName}} \
+                 --account-name ${{ env.AZ_ACCOUNT }} \
                  --overwrite \
                  --content-cache-control "max-age=3600" \
                  --auth-mode login
 
                az afd endpoint purge \
-                  --resource-group ${{steps.keyvault.outputs.resourceGroupName}} \
-                  --profile-name ${{steps.keyvault.outputs.cdnProfileName}} \
-                  --endpoint-name ${{steps.keyvault.outputs.cdnName}} \
+                  --resource-group ${{ env.AZ_RESOURCE_GROUP }} \
+                  --profile-name ${{ env.AZ_CDN_PROFILE }} \
+                  --endpoint-name ${{env.AZ_CDN }} \
                   --domains $DEPLOYMENT_DOMAIN \
                   --content-paths "${PRODUCTION_URL_PATH}/*" \
                   --no-wait
