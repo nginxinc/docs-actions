@@ -134,7 +134,7 @@ jobs:
           fi
 
           if [[ ! "${DEPLOYMENT_ENV}" =~ ^(dev|staging|prod|preview|staging_techdocs|prod_techdocs)$ ]]; then
-            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview"
+            echo "::error::Invalid environment input: ${DEPLOYMENT_ENV}. Must be one of dev, staging, prod, preview, staging_techdocs, prod_techdocs"
             exit 1
           fi
 
@@ -315,7 +315,7 @@ jobs:
                   --no-wait
 
       - name: Azure upload to specified environment
-        uses: azure/cli@089eac9d8cc39f5d003e94f8b65efc51076c9cbd # v2.1.0
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3.0.0
         if: env.IS_PREVIEW != 'true'
         with:
           inlineScript: |
