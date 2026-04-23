@@ -200,7 +200,7 @@ jobs:
           subscription-id: ${{ secrets.OIDC_SUBSCRIPTION_ID }}
 
       - name: Retrieve secrets from keyvault
-        uses: nginx/ci-self-hosted/.github/actions/get-from-vault@refs/heads/main
+        uses: nginx/ci-self-hosted/.github/actions/get-from-vault@0fc1fc087a55f75740cebba008010c812b6d0da2 #main
         with:
           vault-name: ${{ secrets.AZURE_KEY_VAULT }}
           secret-names: resourceGroupName, cdnProfileName, cdnName, accountName
