@@ -98,6 +98,7 @@ jobs:
       id-token: write
       contents: read
       issues: write
+      pull-requests: write
     outputs: 
       PREVIEW_URL: ${{ steps.summary.outputs.PREVIEW_URL }}
     env:
