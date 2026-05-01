@@ -11,6 +11,8 @@ on:
         required: true
       AZURE_KEY_VAULT:
         required: true
+      ISSUE_COMMENT_TOKEN:
+        required: true
     inputs:
       environment:
         description: "This will be appended to the baseURL for for production builds. For example, main docs will be `/` where agent would be `/nginx-agent`"
@@ -348,6 +350,7 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         if: env.DEPLOYMENT_ENV == 'preview' && (github.event.action == 'synchronize' || github.event.action == 'opened')
         with:
+          github-token: ${{ secrets.ISSUE_COMMENT_TOKEN }}
           script: |
             // If a comment already exists, skip
             const { data: comments } = await github.rest.issues.listComments({
