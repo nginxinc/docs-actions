@@ -298,14 +298,13 @@ jobs:
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
-            && az storage blob upload-batch \
+            && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
-                 -d '$web' \
-                 --destination-path "dev/${{github.repository}}/previews/${PR_NUMBER}" \
+                 -c '$web' \
+                 --destination "dev/${{github.repository}}/previews/${PR_NUMBER}" \
                  --account-name ${{ env.AZ_ACCOUNT }} \
-                 --overwrite \
-                 --content-cache-control "max-age=3600" \
-                 --auth-mode login
+                 --auth-mode login \
+                 -- --compare-hash=MD5
 
                  az afd endpoint purge \
                   --resource-group ${{ env.AZ_RESOURCE_GROUP }} \
@@ -321,14 +320,13 @@ jobs:
         with:
           inlineScript: |
             cd ${{inputs.docs_build_path}} \
-            && az storage blob upload-batch \
+            && az storage blob sync \
                  -s $DOCS_SOURCE_PATH \
-                 -d '$web' \
-                 --destination-path "${STORAGE_PREFIX}/${{github.repository}}/latest/" \
+                 -c '$web' \
+                 --destination "${STORAGE_PREFIX}/${{github.repository}}/latest/" \
                  --account-name ${{ env.AZ_ACCOUNT }} \
-                 --overwrite \
-                 --content-cache-control "max-age=3600" \
-                 --auth-mode login
+                 --auth-mode login \
+                 -- --compare-hash=MD5
 
                az afd endpoint purge \
                   --resource-group ${{ env.AZ_RESOURCE_GROUP }} \
