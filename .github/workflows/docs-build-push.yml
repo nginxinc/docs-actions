@@ -325,7 +325,7 @@ jobs:
                  -c '$web' \
                  --destination "${STORAGE_PREFIX}/${{github.repository}}/latest/" \
                  --account-name ${{ env.AZ_ACCOUNT }} \
-                 --auth-mode login
+                 --auth-mode login \
                  -- --compare-hash=MD5
 
                az afd endpoint purge \
